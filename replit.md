@@ -21,14 +21,10 @@ Preferred communication style: Simple, everyday language.
 - **Theme**: Dark/light mode support
 - **UI/UX Decisions**: Mobile-first design, compact authentication flows, SF Pro font, clean white/gray backgrounds with colorful icons, modern card designs, consolidated mobile navigation. Key features include mobile-optimized modals, consistent currency formatting (₦300k), enhanced chat reactions, and playful loading animations.
 
-### Backend Architecture
-- **Runtime**: Node.js with Express 4.21.2
-- **Database**: PostgreSQL with Drizzle ORM 0.39.1
-- **Database Connection**: Supabase PostgreSQL with direct TCP connection pooling
-- **Authentication**: Privy.io with Passport.js (OpenID Connect)
-- **Session Management**: Express-session with PostgreSQL storage
-- **Real-time**: Native WebSocket + Pusher 5.2.0
-- **API**: RESTful architecture
+### Project Architecture
+- All core application logic, database storage (PostgreSQL on Supabase), and wallet balances (Points/Coins) are currently **off-chain**.
+- The authentication and identity layer are **on-chain**, utilizing Web3 wallets through Privy.io. This hybrid model provides Web3 security with off-chain speed and zero-fee transactions.
+- Future phases may explore migrating betting pools or rewards to Layer 2 blockchain solutions.
 
 ### Key Components
 - **Authentication System**: Replit Auth integration for user authentication, session management, and profile handling.
