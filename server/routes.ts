@@ -5,6 +5,7 @@ import { setupAuth } from "./auth";
 import { PrivyAuthMiddleware } from "./privyAuth";
 import { setupOGImageRoutes } from "./ogImageGenerator";
 import ogMetadataRouter from './routes/og-metadata';
+import { registerBlockchainRoutes } from './routes/index';
 
 interface AuthenticatedRequest extends Request {
   user: {
@@ -46,6 +47,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Users routes
+  app.get('/api/users', PrivyAuthMiddleware, async (req: AuthenticatedRequest, res) => {
+    try {
+      const allUsers = await storage.getAllUsers();
+      res.json(allUsers);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch users" });
+    }
+  });
+
   // Wallet routes
   app.post('/api/wallet/deposit', PrivyAuthMiddleware, async (req: AuthenticatedRequest, res) => {
     try {
@@ -61,6 +72,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   setupOGImageRoutes(app);
   app.use(ogMetadataRouter);
+
+  // Register blockchain routes (Phase 4)
+  console.log('📡 Registering blockchain routes...');
+  registerBlockchainRoutes(app);
+  console.log('✅ Blockchain routes registered');
 
   return httpServer;
 }

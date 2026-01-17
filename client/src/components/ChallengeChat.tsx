@@ -117,26 +117,6 @@ export function ChallengeChat({ challenge, onClose }: ChallengeChatProps) {
     },
   });
 
-  const acceptChallengeMutation = useMutation({
-    mutationFn: async () => {
-      return await apiRequest("POST", `/api/challenges/${challenge.id}/accept`);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/challenges"] });
-      toast({
-        title: "Success",
-        description: "Challenge accepted! Your funds have been escrowed.",
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to accept challenge",
-        variant: "destructive",
-      });
-    },
-  });
-
   const disputeChallengeMutation = useMutation({
     mutationFn: async () => {
       return await apiRequest("PATCH", `/api/challenges/${challenge.id}`, { status: "disputed" });
@@ -236,10 +216,6 @@ export function ChallengeChat({ challenge, onClose }: ChallengeChatProps) {
     });
   };
 
-  const handleAcceptChallenge = () => {
-    acceptChallengeMutation.mutate();
-  };
-
   const handleDispute = () => {
     disputeChallengeMutation.mutate();
   };
@@ -257,11 +233,9 @@ export function ChallengeChat({ challenge, onClose }: ChallengeChatProps) {
 
   const isMyMessage = (msg: Message) => msg.userId === user?.id;
   const isParticipant = user?.id === challenge.challenger || user?.id === challenge.challenged;
-  const isPending = challenge.status === 'pending';
   const isActive = challenge.status === 'active';
-  const canAccept = isPending && user?.id === challenge.challenged;
 
-  if (!isParticipant) {
+  if (!isParticipant || !isActive) {
     return (
       <Card className="max-w-md mx-auto">
         <CardContent className="p-6 text-center">
@@ -322,29 +296,6 @@ export function ChallengeChat({ challenge, onClose }: ChallengeChatProps) {
           )}
         </div>
       </div>
-
-      {/* Accept Challenge Section */}
-      {canAccept && (
-        <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border-b">
-          <div className="flex items-center justify-between">
-            <div>
-              <h4 className="font-semibold text-blue-900 dark:text-blue-100">
-                Challenge Received
-              </h4>
-              <p className="text-sm text-blue-700 dark:text-blue-300">
-                Accept this challenge to start the competition
-              </p>
-            </div>
-            <Button
-              onClick={handleAcceptChallenge}
-              disabled={acceptChallengeMutation.isPending}
-              className="bg-blue-600 hover:bg-blue-700"
-            >
-              {acceptChallengeMutation.isPending ? "Accepting..." : "Accept Challenge"}
-            </Button>
-          </div>
-        </div>
-      )}
 
       {/* Messages or Open Challenge View */}
       {isOpenChallenge ? (

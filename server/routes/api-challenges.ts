@@ -1,0 +1,485 @@
+/**
+ * Phase 4: API Routes - Challenge Operations
+ * REST endpoints for challenge creation, joining, and management
+ */
+
+import { Router, Request, Response } from 'express';
+import { isAuthenticated } from '../auth';
+import {
+  createAdminChallenge,
+  createP2PChallenge,
+  joinAdminChallenge,
+  acceptP2PChallenge,
+  getChallenge,
+  getChallengeParticipants,
+  getUserLockedStakes,
+  getTokenBalance,
+  approveToken,
+} from '../blockchain/helpers';
+import {
+  recordPointsTransaction,
+  createEscrowRecord,
+  recordContractDeployment,
+  addUserWallet,
+  getUserPrimaryWallet,
+} from '../blockchain/db-utils';
+import { db } from '../db';
+import { challenges } from '../../shared/schema';
+import { eq } from 'drizzle-orm';
+
+const router = Router();
+
+/**
+ * GET /api/challenges/public
+ * Get all public challenges (no auth required)
+ */
+router.get('/public', async (req: Request, res: Response) => {
+  try {
+    const allChallenges = await db.select().from(challenges);
+    
+    // Filter public challenges (open status or completed)
+    const publicChallenges = allChallenges.filter(c => 
+      c.status === 'open' || c.status === 'active' || c.status === 'completed'
+    );
+
+    res.json(publicChallenges);
+  } catch (error: any) {
+    console.error('Error fetching public challenges:', error);
+    res.status(500).json({ error: 'Failed to fetch challenges' });
+  }
+});
+
+/**
+ * POST /api/challenges/create-admin
+ * Create a new admin-created challenge (betting pool)
+ */
+router.post('/create-admin', isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const { stakeAmount, paymentToken, metadataURI, title, description, category } = req.body;
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    if (!stakeAmount || !paymentToken || !metadataURI) {
+      return res.status(400).json({
+        error: 'Missing required fields: stakeAmount, paymentToken, metadataURI',
+      });
+    }
+
+    // Validate token addresses (USDC or USDT on Base Sepolia)
+    const USDC = '0x833589fCD6eDb6E08f4c7C32D4f71b3566dA8860';
+    const USDT = '0x3c499c542cEF5E3811e1192ce70d8cC7d307B653';
+    
+    if (![USDC, USDT].includes(paymentToken.toLowerCase())) {
+      return res.status(400).json({
+        error: 'Invalid token. Must be USDC or USDT',
+      });
+    }
+
+    console.log(`\n💾 Creating admin challenge from ${userId}...`);
+
+    // Create challenge in database first
+    const dbChallenge = await db
+      .insert(challenges)
+      .values({
+        title,
+        description,
+        category: category || 'general',
+        amount: parseInt(stakeAmount) * 2, // Display both sides
+        status: 'pending',
+        adminCreated: true,
+        challenger: userId,
+        paymentTokenAddress: paymentToken,
+        stakeAmountWei: BigInt(stakeAmount + '000000'), // 6 decimals for USDC/USDT
+        onChainStatus: 'pending',
+      })
+      .returning();
+
+    const challengeId = dbChallenge[0].id;
+    console.log(`📋 Challenge created in DB with ID: ${challengeId}`);
+
+    // Create on-chain
+    console.log(`⛓️  Creating on-chain...`);
+    const txResult = await createAdminChallenge(
+      stakeAmount,
+      paymentToken,
+      metadataURI,
+      req.user as any // User signer would come from Privy
+    );
+
+    // Update database with blockchain info
+    await db
+      .update(challenges)
+      .set({
+        blockchainCreationTxHash: txResult.transactionHash,
+        blockchainBlockNumber: txResult.blockNumber,
+        onChainStatus: 'active',
+        onChainResolved: false,
+      })
+      .where(eq(challenges.id, challengeId));
+
+    console.log(`✅ Admin challenge created: ${txResult.transactionHash}`);
+
+    res.json({
+      success: true,
+      challengeId,
+      transactionHash: txResult.transactionHash,
+      blockNumber: txResult.blockNumber,
+      title,
+      stakeAmount,
+      paymentToken,
+    });
+  } catch (error: any) {
+    console.error('Failed to create admin challenge:', error);
+    res.status(500).json({
+      error: 'Failed to create challenge',
+      message: error.message,
+    });
+  }
+});
+
+/**
+ * POST /api/challenges/create-p2p
+ * Create a P2P challenge between two users
+ */
+router.post('/create-p2p', isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const { opponentId, stakeAmount, paymentToken, metadataURI, title, description } = req.body;
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    if (!opponentId || !stakeAmount || !paymentToken) {
+      return res.status(400).json({
+        error: 'Missing required fields: opponentId, stakeAmount, paymentToken',
+      });
+    }
+
+    if (userId === opponentId) {
+      return res.status(400).json({
+        error: 'Cannot challenge yourself',
+      });
+    }
+
+    console.log(`\n💾 Creating P2P challenge: ${userId} vs ${opponentId}...`);
+
+    // Create in database
+    const dbChallenge = await db
+      .insert(challenges)
+      .values({
+        title,
+        description,
+        category: 'p2p',
+        amount: parseInt(stakeAmount) * 2,
+        status: 'pending',
+        adminCreated: false,
+        challenger: userId,
+        challenged: opponentId,
+        paymentTokenAddress: paymentToken,
+        stakeAmountWei: BigInt(ethers.parseUnits(stakeAmount, 6).toString()),
+        onChainStatus: 'pending',
+      })
+      .returning();
+
+    const challengeId = dbChallenge[0].id;
+
+    // Create on-chain
+    const txResult = await createP2PChallenge(
+      opponentId, // opponent wallet
+      stakeAmount,
+      paymentToken,
+      metadataURI,
+      req.user as any
+    );
+
+    // Update with blockchain info
+    await db
+      .update(challenges)
+      .set({
+        blockchainCreationTxHash: txResult.transactionHash,
+        onChainStatus: 'created',
+      })
+      .where(eq(challenges.id, challengeId));
+
+    res.json({
+      success: true,
+      challengeId,
+      transactionHash: txResult.transactionHash,
+      title,
+      opponent: opponentId,
+      stakeAmount,
+    });
+  } catch (error: any) {
+    console.error('Failed to create P2P challenge:', error);
+    res.status(500).json({
+      error: 'Failed to create P2P challenge',
+      message: error.message,
+    });
+  }
+});
+
+/**
+ * POST /api/challenges/:id/join
+ * Join an admin challenge (choose YES or NO side)
+ */
+router.post('/:id/join', isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const { side } = req.body; // true for YES, false for NO
+    const challengeId = parseInt(req.params.id);
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    if (side === undefined) {
+      return res.status(400).json({
+        error: 'Missing required field: side (true for YES, false for NO)',
+      });
+    }
+
+    console.log(`\n🔗 User ${userId} joining challenge ${challengeId} on side ${side ? 'YES' : 'NO'}...`);
+
+    // Get challenge
+    const dbChallenge = await db
+      .select()
+      .from(challenges)
+      .where(eq(challenges.id, challengeId))
+      .limit(1);
+
+    if (!dbChallenge.length) {
+      return res.status(404).json({ error: 'Challenge not found' });
+    }
+
+    const challenge = dbChallenge[0];
+
+    // Get on-chain challenge
+    const onChainChallenge = await getChallenge(challengeId);
+
+    // Join on-chain
+    const txResult = await joinAdminChallenge(
+      challengeId,
+      side,
+      req.user as any
+    );
+
+    // Record escrow
+    if (challenge.stakeAmountWei) {
+      await createEscrowRecord({
+        challengeId,
+        userId,
+        tokenAddress: challenge.paymentTokenAddress!,
+        amountEscrowed: challenge.stakeAmountWei,
+        status: 'locked',
+        side: side ? 'YES' : 'NO',
+        lockTxHash: txResult.transactionHash,
+      });
+    }
+
+    console.log(`✅ User joined challenge: ${txResult.transactionHash}`);
+
+    res.json({
+      success: true,
+      challengeId,
+      transactionHash: txResult.transactionHash,
+      side: side ? 'YES' : 'NO',
+    });
+  } catch (error: any) {
+    console.error('Failed to join challenge:', error);
+    res.status(500).json({
+      error: 'Failed to join challenge',
+      message: error.message,
+    });
+  }
+});
+
+/**
+ * POST /api/challenges/:id/accept
+ * Accept a P2P challenge (as the challenged user)
+ */
+router.post('/:id/accept', isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const challengeId = parseInt(req.params.id);
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    console.log(`\n🤝 User ${userId} accepting P2P challenge ${challengeId}...`);
+
+    // Get challenge
+    const dbChallenge = await db
+      .select()
+      .from(challenges)
+      .where(eq(challenges.id, challengeId))
+      .limit(1);
+
+    if (!dbChallenge.length) {
+      return res.status(404).json({ error: 'Challenge not found' });
+    }
+
+    const challenge = dbChallenge[0];
+
+    if (challenge.challenged !== userId) {
+      return res.status(403).json({
+        error: 'Not the challenged user',
+      });
+    }
+
+    // Accept on-chain
+    const txResult = await acceptP2PChallenge(challengeId, req.user as any);
+
+    // Record escrow
+    if (challenge.stakeAmountWei) {
+      await createEscrowRecord({
+        challengeId,
+        userId,
+        tokenAddress: challenge.paymentTokenAddress!,
+        amountEscrowed: challenge.stakeAmountWei,
+        status: 'locked',
+        side: 'CHALLENGER', // They're the acceptor
+        lockTxHash: txResult.transactionHash,
+      });
+    }
+
+    // Update challenge
+    await db
+      .update(challenges)
+      .set({
+        status: 'active',
+        onChainStatus: 'active',
+      })
+      .where(eq(challenges.id, challengeId));
+
+    console.log(`✅ P2P challenge accepted: ${txResult.transactionHash}`);
+
+    res.json({
+      success: true,
+      challengeId,
+      transactionHash: txResult.transactionHash,
+    });
+  } catch (error: any) {
+    console.error('Failed to accept challenge:', error);
+    res.status(500).json({
+      error: 'Failed to accept challenge',
+      message: error.message,
+    });
+  }
+});
+
+/**
+ * GET /api/challenges/:id
+ * Get challenge details with on-chain data
+ */
+router.get('/:id', isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const challengeId = parseInt(req.params.id);
+
+    // Get from database
+    const dbChallenge = await db
+      .select()
+      .from(challenges)
+      .where(eq(challenges.id, challengeId))
+      .limit(1);
+
+    if (!dbChallenge.length) {
+      return res.status(404).json({ error: 'Challenge not found' });
+    }
+
+    const challenge = dbChallenge[0];
+
+    // Get on-chain data
+    let onChainData = null;
+    let participants = null;
+
+    try {
+      onChainData = await getChallenge(challengeId);
+      participants = await getChallengeParticipants(challengeId);
+    } catch (error) {
+      console.warn('Could not fetch on-chain data:', error);
+    }
+
+    res.json({
+      ...challenge,
+      onChainData,
+      participants,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      error: 'Failed to get challenge',
+      message: error.message,
+    });
+  }
+});
+
+/**
+ * GET /api/challenges
+ * List challenges with filters
+ */
+router.get('/', isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const { status, adminCreated, limit = 50, offset = 0 } = req.query;
+
+    let query = db.select().from(challenges);
+
+    if (status) {
+      query = query.where(eq(challenges.status, status as string));
+    }
+
+    if (adminCreated !== undefined) {
+      query = query.where(eq(challenges.adminCreated, adminCreated === 'true'));
+    }
+
+    const result = await query
+      .limit(parseInt(limit as string))
+      .offset(parseInt(offset as string));
+
+    res.json({
+      challenges: result,
+      total: result.length,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      error: 'Failed to list challenges',
+      message: error.message,
+    });
+  }
+});
+
+/**
+ * GET /api/challenges/user/:userId
+ * Get user's challenges
+ */
+router.get('/user/:userId', isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.params;
+
+    const userChallenges = await db
+      .select()
+      .from(challenges)
+      .where(
+        // Challenges where user is challenger or challenged
+        db.raw(
+          `(challenger = $1 OR challenged = $1)`
+        )
+      )
+      .orderBy(challenges.createdAt);
+
+    res.json({
+      challenges: userChallenges,
+      total: userChallenges.length,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      error: 'Failed to get user challenges',
+      message: error.message,
+    });
+  }
+});
+
+export default router;

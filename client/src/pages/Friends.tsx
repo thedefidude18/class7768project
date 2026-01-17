@@ -203,12 +203,16 @@ const createChallengeSchema = z.object({
     },
   });
 
-  const { data: allUsers = [] as any[] } = useQuery({
+  const { data: allUsers = [] } = useQuery({
     queryKey: ["/api/users"],
     retry: false,
+    select: (data) => {
+      // Ensure data is always an array
+      return Array.isArray(data) ? data : [];
+    },
   });
 
-  const filteredUsers = (allUsers as any[]).filter((u: any) => {
+  const filteredUsers = (allUsers || []).filter((u: any) => {
     if (u.id === user?.id) return false;
     if (u.isAdmin) return false; // Hide admin and superadmin users
 

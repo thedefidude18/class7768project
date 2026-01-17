@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
+import { usePrivy } from "@privy-io/react-auth";
 import { MobileNavigation } from "@/components/MobileNavigation";
 import MobileLayout from "@/components/MobileLayout";
 import { Button } from "@/components/ui/button";
@@ -27,6 +28,7 @@ import { ProfileQRCode } from "@/components/ProfileQRCode";
 
 export default function Profile() {
   const { user, logout } = useAuth();
+  const { user: privyUser } = usePrivy();
   const { toast } = useToast();
   const [, navigate] = useLocation();
 

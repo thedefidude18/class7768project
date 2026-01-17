@@ -38,9 +38,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
+
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
@@ -82,29 +80,20 @@ function ChallengeCardSkeleton() {
   );
 }
 
-const createChallengeSchema = z.object({
-  challenged: z.string().min(1, "Please select who to challenge"),
-  title: z.string().min(1, "Title is required").max(200, "Title too long"),
-  description: z.string().optional(),
-  category: z.string().min(1, "Category is required"),
-  amount: z.string().min(1, "Stake amount is required"),
-  dueDate: z.string().optional(),
-});
-
 export default function Challenges() {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedChallenge, setSelectedChallenge] = useState<any>(null);
   const [showChat, setShowChat] = useState(false);
-  const [challengeStatusTab, setChallengeStatusTab] = useState<'all' | 'p2p' | 'open' | 'active' | 'pending' | 'completed' | 'ended'>('all');
+  const [challengeStatusTab, setChallengeStatusTab] = useState<'all' | 'open' | 'active' | 'pending' | 'completed' | 'ended'>('all');
   const [showJoinModal, setShowJoinModal] = useState(false);
-  const [preSelectedUser, setPreSelectedUser] = useState<any>(null);
   const [selectedTab, setSelectedTab] = useState<string>('featured');
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [preSelectedUser, setPreSelectedUser] = useState<any>(null);
 
   // Listen for header search events dispatched from Navigation
   useEffect(() => {
@@ -113,30 +102,15 @@ export default function Challenges() {
       setSearchTerm(val);
     };
     const onOpen = () => setIsSearchOpen(true);
-    const onOpenCreateDialog = () => setIsCreateDialogOpen(true);
 
     window.addEventListener("challenges-search", onSearch as EventListener);
     window.addEventListener("open-challenges-search", onOpen as EventListener);
-    window.addEventListener("open-create-dialog", onOpenCreateDialog as EventListener);
 
     return () => {
       window.removeEventListener("challenges-search", onSearch as EventListener);
       window.removeEventListener("open-challenges-search", onOpen as EventListener);
-      window.removeEventListener("open-create-dialog", onOpenCreateDialog as EventListener);
     };
   }, []);
-
-  const form = useForm<z.infer<typeof createChallengeSchema>>({
-    resolver: zodResolver(createChallengeSchema),
-    defaultValues: {
-      challenged: "",
-      title: "",
-      description: "",
-      category: "",
-      amount: "",
-      dueDate: "",
-    },
-  });
 
   const { data: challenges = [], isLoading } = useQuery<any[]>({
     queryKey: ["/api/challenges"],
@@ -229,7 +203,6 @@ export default function Challenges() {
       queryClient.invalidateQueries({ queryKey: ["/api/challenges"] });
       setIsCreateDialogOpen(false);
       setPreSelectedUser(null);
-      form.reset();
     },
     onError: (error: Error) => {
       if (isUnauthorizedError(error)) {
@@ -557,296 +530,78 @@ export default function Challenges() {
             setIsCreateDialogOpen(open);
             if (!open) {
               setPreSelectedUser(null);
-              form.reset();
             }
           }}
         >
           <DialogContent className="sm:max-w-sm max-w-[90vw] max-h-[75vh] overflow-y-auto p-4">
             <DialogHeader className="pb-2">
-              <DialogTitle className="text-base sm:text-lg flex items-center space-x-2">
-                {preSelectedUser ? (
-                  <>
-                    <UserAvatar
-                      userId={preSelectedUser.id}
-                      username={preSelectedUser.username}
-                      size={24}
-                      className="h-6 w-6"
-                    />
-                    <span>
-                      Challenge{" "}
-                      {preSelectedUser.firstName || preSelectedUser.username}
-                    </span>
-                  </>
-                ) : (
-                  "Create New Challenge"
-                )}
+              <DialogTitle className="text-base sm:text-lg">
+                Create Challenge
               </DialogTitle>
             </DialogHeader>
-            {/* Challenge Preview Card */}
-            {(form.watch("challenged") || preSelectedUser) && form.watch("title") && form.watch("amount") && (
-              <div className="mb-3">
-                <div className="hidden sm:block text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">Preview</div>
-                <ChallengePreviewCard
-                  challenger={{
-                    id: user?.id || '',
-                    firstName: (user as any)?.firstName,
-                    username: (user as any)?.username,
-                    profileImageUrl: (user as any)?.profileImageUrl
-                  }}
-                  challenged={preSelectedUser || {
-                    id: form.watch("challenged"),
-                    firstName: "Selected User",
-                    username: "user"
-                  }}
-                  title={form.watch("title")}
-                  description={form.watch("description")}
-                  category={form.watch("category")}
-                  amount={form.watch("amount")}
-                  dueDate={form.watch("dueDate")}
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-2">Title</label>
+                <Input 
+                  placeholder="Challenge title"
+                  id="title"
                 />
               </div>
-            )}
-
-            <Form {...form}>
-              <form
-                onSubmit={form.handleSubmit(onSubmit)}
-                className="space-y-2"
-              >
-                {!preSelectedUser && (
-                  <FormField
-                    control={form.control}
-                    name="challenged"
-                    render={({ field }) => {
-                      // Deduplicate friend list by user id to avoid repeating entries
-                      const uniqueMap = new Map<string, any>();
-                      (friends as any[] || []).forEach((friend: any) => {
-                        const friendUser =
-                          friend.requesterId === user?.id
-                            ? friend.addressee
-                            : friend.requester;
-                        if (friendUser && friendUser.id && !uniqueMap.has(friendUser.id)) {
-                          uniqueMap.set(friendUser.id, friendUser);
-                        }
-                      });
-                      const uniqueFriendUsers = Array.from(uniqueMap.values());
-
-                      return (
-                        <FormItem className="space-y-1">
-                          <FormLabel className="sr-only">
-                            Challenge Friend
-                          </FormLabel>
-                          <Select
-                            onValueChange={field.onChange}
-                            value={field.value}
-                          >
-                            <FormControl>
-                              <SelectTrigger className="h-10 rounded-lg text-sm bg-white dark:bg-slate-800 focus:ring-2 focus:ring-primary/50 transition-colors">
-                                <SelectValue placeholder="👥 Select a friend to challenge" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent className="z-[80] border-0 shadow-md bg-white dark:bg-slate-800 rounded-lg">
-                              {uniqueFriendUsers.length === 0 ? (
-                                <div className="p-4 text-center text-sm text-slate-500">
-                                  <p>No friends yet</p>
-                                  <p className="text-xs mt-1">Go to Friends tab to add friends</p>
-                                </div>
-                              ) : (
-                                uniqueFriendUsers.map((friendUser: any) => (
-                                  <SelectItem
-                                    key={friendUser.id}
-                                    value={friendUser.id}
-                                    className="cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 py-2 border-0 outline-none"
-                                  >
-                                    <div className="flex items-center gap-2">
-                                      <div className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
-                                        {(friendUser.firstName?.[0] || friendUser.username?.[0] || "U").toUpperCase()}
-                                      </div>
-                                      <div className="flex flex-col">
-                                        <span className="font-medium text-sm">
-                                          {friendUser.firstName || friendUser.username}
-                                        </span>
-                                        <span className="text-xs text-slate-500">
-                                          @{friendUser.username || 'user'}
-                                        </span>
-                                      </div>
-                                    </div>
-                                  </SelectItem>
-                                ))
-                              )}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      );
-                    }}
-                  />
-                )}
-
-                {preSelectedUser && (
-                  <div className="flex items-center space-x-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-xs">
-                      {(
-                        preSelectedUser.firstName ||
-                        preSelectedUser.username ||
-                        "U"
-                      )
-                        .charAt(0)
-                        .toUpperCase()}
-                    </div>
-                    <div>
-                      <p className="font-medium text-xs">
-                        {preSelectedUser.firstName ||
-                          preSelectedUser.username}
-                      </p>
-                      <p className="text-xs text-slate-500">
-                        Level {preSelectedUser.level || 1} •{" "}
-                        {preSelectedUser.points || 0} pts
-                      </p>
-                    </div>
-                  </div>
-                )}
-
-                <FormField
-                  control={form.control}
-                  name="title"
-                  render={({ field }) => (
-                    <FormItem className="space-y-1">
-                      <FormLabel className="sr-only">
-                        Challenge Title
-                      </FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder="What's the challenge?"
-                          className="h-8 text-sm"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage className="text-xs" />
-                    </FormItem>
-                  )}
+              <div>
+                <label className="block text-sm font-medium mb-2">Description</label>
+                <Textarea 
+                  placeholder="What's this challenge about?"
+                  id="description"
+                  className="min-h-24"
                 />
-
-                <FormField
-                  control={form.control}
-                  name="description"
-                  render={({ field }) => (
-                    <FormItem className="space-y-1">
-                      <FormLabel className="sr-only">
-                        Description (Optional)
-                      </FormLabel>
-                      <FormControl>
-                        <Textarea
-                          placeholder="Describe the challenge details..."
-                          className="min-h-[50px] text-sm resize-none"
-                          rows={2}
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage className="text-xs" />
-                    </FormItem>
-                  )}
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2">Category</label>
+                <Select>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="sports">Sports</SelectItem>
+                    <SelectItem value="gaming">Gaming</SelectItem>
+                    <SelectItem value="crypto">Crypto</SelectItem>
+                    <SelectItem value="trading">Trading</SelectItem>
+                    <SelectItem value="music">Music</SelectItem>
+                    <SelectItem value="entertainment">Entertainment</SelectItem>
+                    <SelectItem value="politics">Politics</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2">Amount (in points)</label>
+                <Input 
+                  type="number"
+                  placeholder="100"
+                  id="amount"
                 />
-
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-1">
-                  <FormField
-                    control={form.control}
-                    name="category"
-                    render={({ field }) => (
-                      <FormItem className="space-y-1">
-                        <FormLabel className="sr-only">
-                          Category
-                        </FormLabel>
-                        <Select
-                          onValueChange={field.onChange}
-                          defaultValue={field.value}
-                        >
-                          <FormControl>
-                            <SelectTrigger className="h-8 text-sm bg-transparent border-none focus:ring-0">
-                              <SelectValue placeholder="Select" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent className="bg-white dark:bg-slate-800 border-none ring-0 shadow-none">
-                            {categories.map((category) => (
-                              <SelectItem
-                                key={category.value}
-                                value={category.value}
-                              >
-                                <div className="flex items-center space-x-2">
-                                  <i className={category.icon}></i>
-                                  <span>{category.label}</span>
-                                </div>
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage className="text-xs" />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="amount"
-                    render={({ field }) => (
-                      <FormItem className="space-y-1">
-                        <FormLabel className="sr-only">
-                            Stake (₦)
-                          </FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number"
-                            placeholder="500"
-                            className="h-8 text-sm"
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormMessage className="text-xs" />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="dueDate"
-                    render={({ field }) => (
-                      <FormItem className="space-y-1 col-span-2 sm:col-span-1">
-                        <FormLabel className="sr-only">
-                          End Date
-                        </FormLabel>
-                        <FormControl>
-                          <Input
-                            type="datetime-local"
-                            className="h-8 text-sm"
-                            {...field}
-                            min={new Date().toISOString().slice(0, 16)}
-                          />
-                        </FormControl>
-                        <FormMessage className="text-xs" />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
-                <div className="flex space-x-2 pt-2">
-                  <Button
-                    onClick={() => setIsCreateDialogOpen(false)}
-                    className="flex-1 bg-slate-100 text-slate-700 hover:bg-slate-200 h-8 text-sm"
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    type="submit"
-                    disabled={createChallengeMutation.isPending}
-                    className="flex-1 h-8 text-sm text-black hover:opacity-90"
-                    style={{ backgroundColor: '#ccff00' }}
-                  >
-                    {createChallengeMutation.isPending
-                      ? "Creating..."
-                      : "Challenge"}
-                  </Button>
-                </div>
-              </form>
-            </Form>
+              </div>
+              <div className="flex gap-2 pt-2">
+                <Button 
+                  variant="outline" 
+                  onClick={() => setIsCreateDialogOpen(false)}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  onClick={() => {
+                    toast({
+                      title: "Coming Soon",
+                      description: "Challenge creation will be available soon!"
+                    });
+                    setIsCreateDialogOpen(false);
+                  }}
+                  className="flex-1 bg-[#ccff00] text-black hover:bg-[#b8e600]"
+                >
+                  Create
+                </Button>
+              </div>
+            </div>
           </DialogContent>
         </Dialog>
 
