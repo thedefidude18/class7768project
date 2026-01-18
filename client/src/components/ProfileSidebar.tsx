@@ -33,9 +33,7 @@ export function ProfileSidebar() {
               </Button>
             </li>
             <li>
-              <Button variant="ghost" className="w-full justify-start rounded-none px-5 py-4 text-left" onClick={() => navigate('/shop')}>
-                <i className="fas fa-shopping-cart mr-3"></i> Shop
-              </Button>
+
             </li>
             <li>
               <Button variant="ghost" className="w-full justify-start rounded-none px-5 py-4 text-left" onClick={() => navigate('/referrals')}>

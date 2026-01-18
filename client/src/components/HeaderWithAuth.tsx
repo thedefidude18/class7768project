@@ -257,10 +257,7 @@ export function HeaderWithAuth() {
                   <span>Wallet</span>
                 </DropdownMenuItem>
                 
-                <DropdownMenuItem onClick={() => handleNavigation("/shop")}>
-                  <ShoppingCart className="mr-2 h-4 w-4" />
-                  <span>Coin Shop</span>
-                </DropdownMenuItem>
+
                 
                 <DropdownMenuSeparator />
                 

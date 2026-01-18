@@ -46,7 +46,7 @@ export function MobileHeader({
     if (location.startsWith("/leaderboard")) return "Leaderboard";
     if (location.startsWith("/notifications")) return "Notifications";
     if (location.startsWith("/settings")) return "Settings";
-    if (location.startsWith("/shop")) return "Coin Shop";
+
     if (location.startsWith("/history")) return "History";
     if (location.startsWith("/admin")) return "Admin";
     

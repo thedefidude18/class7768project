@@ -23,7 +23,7 @@ import ProfileSettings from "./pages/ProfileSettings";
 import History from "./pages/History";
 import Notifications from "./pages/Notifications";
 import WalletPage from "@/pages/WalletPage";
-import Shop from "@/pages/Shop";
+
 import ReferralNew from "./pages/ReferralNew";
 import Settings from "@/pages/Settings";
 import SupportChat from "@/pages/SupportChat";
