@@ -5,12 +5,12 @@
 
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
+import * as admin from 'firebase-admin';
 
-let admin: any = null;
 let initialized = false;
 
 /**
- * Initialize Firebase Admin SDK (dynamic import if package is available)
+ * Initialize Firebase Admin SDK
  */
 export async function initializeFirebase() {
   if (initialized) {
@@ -19,15 +19,6 @@ export async function initializeFirebase() {
   }
 
   try {
-    // Attempt to dynamically import firebase-admin to avoid hard dependency
-    if (!admin) {
-      try {
-        admin = await import('firebase-admin');
-      } catch (impErr) {
-        console.warn('⚠️ firebase-admin package not installed; Firebase push disabled.');
-        return;
-      }
-    }
 
     // Try to get credentials from environment variable (JSON string)
     const credentialsJson = process.env.FIREBASE_ADMIN_CREDENTIALS;
