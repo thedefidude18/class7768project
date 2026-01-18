@@ -61,6 +61,7 @@ export function registerBlockchainRoutes(app: express.Application) {
    * User Account Operations
    * POST /api/user/fcm-token - Save FCM token for push notifications
    * GET /api/user/profile - Get current user profile
+   * GET /api/user/transactions - Get user's transaction history
    */
   app.use('/api/user', apiUserRouter);
 

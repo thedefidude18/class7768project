@@ -5,8 +5,8 @@
 
 import { Router, Request, Response } from 'express';
 import { db } from '../db';
-import { users } from '../../shared/schema';
-import { eq } from 'drizzle-orm';
+import { users, transactions } from '../../shared/schema';
+import { eq, desc } from 'drizzle-orm';
 import { isAuthenticated } from '../middleware/auth';
 
 const router = Router();
@@ -99,6 +99,67 @@ router.get('/profile', isAuthenticated, async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error fetching user profile:', error);
     res.status(500).json({ error: 'Failed to fetch profile' });
+  }
+});
+
+/**
+ * GET /api/transactions
+ * Get current user's transaction history (deposits, withdrawals, challenge earnings, etc.)
+ */
+router.get('/transactions', isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    const { limit = 50, offset = 0 } = req.query;
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    const limitNum = Math.min(parseInt(limit as string) || 50, 200);
+    const offsetNum = parseInt(offset as string) || 0;
+
+    // Fetch user's transactions ordered by most recent
+    const userTransactions = await db
+      .select()
+      .from(transactions)
+      .where(eq(transactions.userId, userId))
+      .orderBy(desc(transactions.createdAt))
+      .limit(limitNum)
+      .offset(offsetNum);
+
+    // Get total count for pagination
+    const totalResult = await db
+      .select({ count: () => null })
+      .from(transactions)
+      .where(eq(transactions.userId, userId));
+
+    const total = totalResult.length || 0;
+
+    // Format response
+    const formattedTransactions = userTransactions.map((tx) => ({
+      id: tx.id,
+      type: tx.type,
+      amount: tx.amount,
+      description: tx.description,
+      status: tx.status,
+      createdAt: tx.createdAt,
+      relatedId: tx.relatedId,
+    }));
+
+    res.json({
+      transactions: formattedTransactions,
+      pagination: {
+        limit: limitNum,
+        offset: offsetNum,
+        total,
+      },
+    });
+  } catch (error: any) {
+    console.error('Error fetching transactions:', error);
+    res.status(500).json({
+      error: 'Failed to fetch transactions',
+      message: error.message,
+    });
   }
 });
 

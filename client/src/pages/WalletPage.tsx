@@ -2,18 +2,17 @@ import { useState, useEffect } from "react";
 import { MobileNavigation } from "@/components/MobileNavigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
+import { usePrivy } from "@privy-io/react-auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
-  DialogTrigger,
 } from "@/components/ui/dialog";
-import { Badge } from "@/components/ui/badge";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
@@ -25,39 +24,63 @@ import {
   Wallet,
   ArrowUpRight,
   ArrowDownLeft,
-  CreditCard,
   TrendingUp,
-  Eye,
   Receipt,
-  Plus,
-  Minus,
   Gift,
   Calendar,
   Trophy,
-  ArrowLeftRight,
   Coins,
-  DollarSign,
+  Plus,
+  ExternalLink,
+  Zap,
+  Send,
+  Check,
 } from "lucide-react";
 import { useLocation } from "wouter";
 
 export default function WalletPage() {
   const { user } = useAuth();
+  const { user: privyUser, fundWallet } = usePrivy();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [, navigate] = useLocation();
-  const [depositAmount, setDepositAmount] = useState("");
-  const [withdrawAmount, setWithdrawAmount] = useState("");
-  const [isDepositDialogOpen, setIsDepositDialogOpen] = useState(false);
-  const [isWithdrawDialogOpen, setIsWithdrawDialogOpen] = useState(false);
-  const [isSwapDialogOpen, setIsSwapDialogOpen] = useState(false);
-  const [swapAmount, setSwapAmount] = useState("");
-  const [swapDirection, setSwapDirection] = useState<
-    "money-to-coins" | "coins-to-money"
-  >("money-to-coins");
-  const [lastDepositAttempt, setLastDepositAttempt] = useState<number>(0);
-  const [paymentUrl, setPaymentUrl] = useState<string | null>(null);
-  const [paymentReference, setPaymentReference] = useState<string | null>(null);
-  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [isDepositModalOpen, setIsDepositModalOpen] = useState(false);
+
+  // Auto-sync Privy wallet to database when connected
+  useEffect(() => {
+    if (!user?.id || !privyUser?.wallet?.address) {
+      return; // No user or wallet connected
+    }
+
+    const syncWallet = async () => {
+      try {
+        const res = await fetch("/api/points/connect-wallet", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            walletAddress: privyUser.wallet.address,
+            walletType: "privy",
+          }),
+        });
+
+        if (!res.ok) {
+          const error = await res.json();
+          // 409 Conflict = already connected, that's fine
+          if (res.status !== 409) {
+            console.warn("Failed to sync wallet:", error);
+          }
+        } else {
+          console.log("✅ Wallet synced to database");
+          // Refetch wallets list after sync
+          queryClient.invalidateQueries({ queryKey: ["/api/points/wallets", user.id] });
+        }
+      } catch (err) {
+        console.error("Error syncing wallet:", err);
+      }
+    };
+
+    syncWallet();
+  }, [user?.id, privyUser?.wallet?.address, queryClient]);
 
   const { data: balance = { balance: 0, coins: 0 } } = useQuery({
     queryKey: ["/api/wallet/balance"],
@@ -75,6 +98,10 @@ export default function WalletPage() {
       }
     },
   });
+
+  
+
+  
 
   const { data: pointsData } = useQuery({
     queryKey: ["/api/points/balance", user?.id],
@@ -125,7 +152,7 @@ export default function WalletPage() {
   });
 
   const { data: transactions = [], isLoading } = useQuery({
-    queryKey: ["/api/transactions"],
+    queryKey: ["/api/user/transactions"],
     retry: false,
     onError: (error: Error) => {
       if (isUnauthorizedError(error)) {
@@ -141,211 +168,22 @@ export default function WalletPage() {
     },
   });
 
-  const depositMutation = useMutation({
-    mutationFn: async (amount: number) => {
-      // Paystack removed, using direct balance update for demo/test purposes or future implementation
-      const response = await apiRequest("POST", "/api/wallet/deposit", {
-        amount,
-      });
-      return response;
-    },
-    onSuccess: async (data: any) => {
-      toast({
-        title: "Deposit Initiated",
-        description: "Your deposit request has been received.",
-      });
-      queryClient.invalidateQueries({ queryKey: ["/api/wallet/balance"] });
-    },
-    onError: (error: Error) => {
-      if (isUnauthorizedError(error)) {
-        toast({
-          title: "Unauthorized",
-          description: "You are logged out. Logging in again...",
-          variant: "destructive",
-        });
-        setTimeout(() => {
-          window.location.href = "/api/login";
-        }, 500);
-        return;
-      }
-      
-      toast({
-        title: "Deposit Failed",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
-  const withdrawMutation = useMutation({
-    mutationFn: async (amount: number) => {
-      await apiRequest("POST", "/api/wallet/withdraw", { amount });
-    },
-    onSuccess: () => {
-      toast({
-        title: "Withdrawal Requested",
-        description: "Your withdrawal request is being processed!",
-      });
-      queryClient.invalidateQueries({ queryKey: ["/api/wallet/balance"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/transactions"] });
-      setIsWithdrawDialogOpen(false);
-      setWithdrawAmount("");
-    },
-    onError: (error: Error) => {
-      if (isUnauthorizedError(error)) {
-        toast({
-          title: "Unauthorized",
-          description: "You are logged out. Logging in again...",
-          variant: "destructive",
-        });
-        setTimeout(() => {
-          window.location.href = "/api/login";
-        }, 500);
-        return;
-      }
-      toast({
-        title: "Withdrawal Failed",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
-  const swapMutation = useMutation({
-    mutationFn: async ({
-      amount,
-      direction,
-    }: {
-      amount: number;
-      direction: "money-to-coins" | "coins-to-money";
-    }) => {
-      const response = await apiRequest("POST", "/api/wallet/swap", {
-        amount,
-        fromCurrency: direction === "money-to-coins" ? "money" : "coins",
-        toCurrency: direction === "money-to-coins" ? "coins" : "money",
-      });
-      return response;
-    },
-    onSuccess: (data: any) => {
-      toast({
-        title: "Swap Successful",
-        description: `Successfully swapped ${data.fromAmount} ${data.fromCurrency} for ${data.toAmount} ${data.toCurrency}!`,
-      });
-      queryClient.invalidateQueries({ queryKey: ["/api/wallet/balance"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/transactions"] });
-      setIsSwapDialogOpen(false);
-      setSwapAmount("");
-    },
-    onError: (error: Error) => {
-      if (isUnauthorizedError(error)) {
-        toast({
-          title: "Unauthorized",
-          description: "You are logged out. Logging in again...",
-          variant: "destructive",
-        });
-        setTimeout(() => {
-          window.location.href = "/api/login";
-        }, 500);
-        return;
-      }
-      toast({
-        title: "Swap Failed",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
-  const setPrimaryMutation = useMutation({
-    mutationFn: async (walletId: number) => {
-      return await apiRequest("POST", `/api/points/set-primary-wallet/${walletId}`);
-    },
-    onSuccess: () => {
-      toast({ title: "Primary wallet updated" });
-      queryClient.invalidateQueries({ queryKey: ["/api/points/wallets"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/wallet/balance"] });
-    },
-    onError: (error: Error) => {
-      toast({ title: "Failed to update primary", description: error.message, variant: "destructive" });
-    },
-  });
-
-  const handleDeposit = () => {
-    const amount = parseFloat(depositAmount);
-    const now = Date.now();
-    
-    // Prevent rapid successive attempts (3 second cooldown)
-    if (now - lastDepositAttempt < 3000) {
-      toast({
-        title: "Please Wait",
-        description: "Please wait a moment before trying again.",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    if (amount > 0) {
-      setLastDepositAttempt(now);
-      depositMutation.mutate(amount);
-    }
-  };
-
-  const handleWithdraw = () => {
-    const amount = parseFloat(withdrawAmount);
-    const currentBalance =
-      typeof balance === "object" ? balance.balance : balance;
-    if (amount > 0 && amount <= currentBalance) {
-      withdrawMutation.mutate(amount);
-    } else {
-      toast({
-        title: "Invalid Amount",
-        description: "Withdrawal amount exceeds your balance.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleSwap = () => {
-    const amount = parseFloat(swapAmount);
-    const currentBalance =
-      typeof balance === "object" ? balance.balance : balance;
-    const currentCoins = typeof balance === "object" ? balance.coins : 0;
-
-    if (amount <= 0) {
-      toast({
-        title: "Invalid Amount",
-        description: "Please enter a valid amount.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (swapDirection === "money-to-coins" && amount > currentBalance) {
-      toast({
-        title: "Insufficient Balance",
-        description: "You don't have enough money to swap.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (swapDirection === "coins-to-money" && amount > currentCoins) {
-      toast({
-        title: "Insufficient Coins",
-        description: "You don't have enough coins to swap.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    swapMutation.mutate({ amount, direction: swapDirection });
-  };
+  // Normalize transactions to an array shape for rendering
+  const txArray = Array.isArray(transactions)
+    ? transactions
+    : (transactions && (transactions.transactions || transactions.items)) || [];
 
   if (!user) return null;
 
   const currentBalance =
     typeof balance === "object" ? balance.balance || 0 : balance || 0;
   const currentCoins = typeof balance === "object" ? balance.coins || 0 : 0;
+
+  // Prefer primary connected wallet crypto (USDC) display when available
+  const primaryWallet = walletsData?.wallets?.find((w: any) => w.isPrimary) || null;
+  const primaryCryptoDisplay = primaryWallet
+    ? `${(Number(primaryWallet.usdcBalance || 0) / 1e6).toLocaleString()} USDC`
+    : null;
 
   const currentPointsDisplay = pointsData?.balanceFormatted ?? '0';
   const currentPointsShort = (() => {
@@ -377,7 +215,7 @@ export default function WalletPage() {
                 Main Balance
               </p>
               <h3 className="text-xl font-bold text-emerald-900 dark:text-emerald-100">
-                {formatBalance(currentBalance)}
+                {primaryCryptoDisplay ? primaryCryptoDisplay : formatBalance(currentBalance)}
               </h3>
             </div>
           </div>
@@ -396,7 +234,7 @@ export default function WalletPage() {
             </div>
             <div className="space-y-0.5">
               <p className="text-xs text-amber-600 dark:text-amber-400 font-medium">
-                Bantah Bucks
+                Bantah Points
               </p>
               <h3 className="text-xl font-bold text-amber-900 dark:text-amber-100">
                 {currentCoins.toLocaleString()}
@@ -435,72 +273,27 @@ export default function WalletPage() {
           )}
         </div>
 
-        {/* Quick Actions */}
-        <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200 dark:border-slate-700 mb-5">
-          <h3 className="text-base font-bold text-slate-900 dark:text-white mb-3">
-            Quick Actions
-          </h3>
-          <div className="grid grid-cols-3 gap-2">
-            <Dialog
-              open={isDepositDialogOpen}
-              onOpenChange={setIsDepositDialogOpen}
-            >
-              <DialogTrigger asChild>
-                <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-3 border border-blue-100 dark:border-blue-800/30 cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors">
-                  <div className="flex flex-col items-center gap-1.5 text-center">
-                    <div className="w-8 h-8 rounded-xl bg-blue-200 dark:bg-blue-700 flex items-center justify-center">
-                      <Plus className="w-4 h-4 text-blue-700 dark:text-blue-300" />
-                    </div>
-                    <div>
-                      <h4 className="font-semibold text-blue-900 dark:text-blue-100 text-xs">
-                        Add Money
-                      </h4>
-                      <p className="text-xs text-blue-600 dark:text-blue-400"></p>
-                    </div>
-                  </div>
-                </div>
-              </DialogTrigger>
-            </Dialog>
-
-            <Dialog open={isSwapDialogOpen} onOpenChange={setIsSwapDialogOpen}>
-              <DialogTrigger asChild>
-                <div className="bg-green-50 dark:bg-green-900/20 rounded-xl p-3 border border-green-100 dark:border-green-800/30 cursor-pointer hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors">
-                  <div className="flex flex-col items-center gap-1.5 text-center">
-                    <div className="w-8 h-8 rounded-xl bg-green-200 dark:bg-green-700 flex items-center justify-center">
-                      <ArrowLeftRight className="w-4 h-4 text-green-700 dark:text-green-300" />
-                    </div>
-                    <div>
-                      <h4 className="font-semibold text-green-900 dark:text-green-100 text-xs">
-                        Swap
-                      </h4>
-                      <p className="text-xs text-green-600 dark:text-green-400"></p>
-                    </div>
-                  </div>
-                </div>
-              </DialogTrigger>
-            </Dialog>
-
-            <Dialog
-              open={isWithdrawDialogOpen}
-              onOpenChange={setIsWithdrawDialogOpen}
-            >
-              <DialogTrigger asChild>
-                <div className="bg-purple-50 dark:bg-purple-900/20 rounded-xl p-3 border border-purple-100 dark:border-purple-800/30 cursor-pointer hover:bg-purple-100 dark:hover:bg-purple-900/30 transition-colors">
-                  <div className="flex flex-col items-center gap-1.5 text-center">
-                    <div className="w-8 h-8 rounded-xl bg-purple-200 dark:bg-purple-700 flex items-center justify-center">
-                      <ArrowUpRight className="w-4 h-4 text-purple-700 dark:text-purple-300" />
-                    </div>
-                    <div>
-                      <h4 className="font-semibold text-purple-900 dark:text-purple-100 text-xs">
-                        Cash out
-                      </h4>
-                      <p className="text-xs text-purple-600 dark:text-purple-400"></p>
-                    </div>
-                  </div>
-                </div>
-              </DialogTrigger>
-            </Dialog>
-          </div>
+        {/* Deposit & Claim Actions */}
+        <div className="grid grid-cols-2 gap-3 mt-6">
+          <Button
+            onClick={() => setIsDepositModalOpen(true)}
+            className="bg-green-600 hover:bg-green-700 text-white rounded-xl h-12 font-semibold flex items-center justify-center gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            Deposit
+          </Button>
+          <Button
+            onClick={() => {
+              toast({
+                title: "Auto-Claiming",
+                description: "Your earnings are automatically in your wallet!",
+              });
+            }}
+            className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl h-12 font-semibold flex items-center justify-center gap-2"
+          >
+            <Check className="w-4 h-4" />
+            Claim Earnings
+          </Button>
         </div>
 
         {/* Recent Transactions */}
@@ -521,7 +314,7 @@ export default function WalletPage() {
               description="Getting your transaction history..."
               className="py-8"
             />
-          ) : transactions.length === 0 ? (
+          ) : txArray.length === 0 ? (
             <div className="text-center py-8">
               <div className="w-16 h-16 bg-slate-100 dark:bg-slate-700 rounded-3xl flex items-center justify-center mx-auto mb-4">
                 <Receipt className="w-8 h-8 text-slate-400" />
@@ -535,7 +328,7 @@ export default function WalletPage() {
             </div>
           ) : (
             <div className="space-y-3">
-              {transactions.slice(0, 5).map((transaction: any) => (
+              {txArray.slice(0, 5).map((transaction: any) => (
                 <div
                   key={transaction.id}
                   className="flex items-center justify-between p-3 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-2xl transition-colors"
@@ -632,324 +425,109 @@ export default function WalletPage() {
           )}
         </div>
 
-        {/* Deposit Dialog */}
-        <Dialog
-          open={isDepositDialogOpen}
-          onOpenChange={setIsDepositDialogOpen}
-        >
+        {/* Deposit Modal */}
+        <Dialog open={isDepositModalOpen} onOpenChange={setIsDepositModalOpen}>
           <DialogContent className="rounded-2xl max-w-xs mx-auto border-0 bg-white dark:bg-slate-800">
             <DialogHeader className="pb-2">
-              <DialogTitle className="text-center text-lg font-bold">
-                Add Money
-              </DialogTitle>
-              <DialogDescription className="sr-only">
-                Deposit funds to your wallet using Paystack
+              <DialogTitle className="text-center text-lg font-bold">Add USDC</DialogTitle>
+              <DialogDescription className="text-center text-sm text-slate-500 dark:text-slate-400">
+                Choose a way to fund your wallet
               </DialogDescription>
             </DialogHeader>
-            <div className="space-y-4">
-              <div className="relative">
-                <Input
-                  type="number"
-                  placeholder="Enter amount"
-                  value={depositAmount}
-                  onChange={(e) => setDepositAmount(e.target.value)}
-                  className="text-center text-base border-0 bg-slate-50 dark:bg-slate-700 rounded-xl h-12 pl-8"
-                />
-                <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400">
-                  ₦
-                </span>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                {[500, 1000, 2500, 5000].map((amount) => (
-                  <Button
-                    key={amount}
-                    variant="outline"
-                    onClick={() => setDepositAmount(amount.toString())}
-                    className="h-9 text-sm border-0 bg-slate-50 dark:bg-slate-700 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-600"
-                  >
-                    ₦{amount.toLocaleString()}
-                  </Button>
-                ))}
-              </div>
-              <Button
-                onClick={handleDeposit}
-                disabled={!depositAmount || depositMutation.isPending}
-                className="w-full h-11 rounded-xl text-black font-semibold"
-                style={{ backgroundColor: '#ccff00' }}
-                data-testid="button-deposit-continue"
+
+            <div className="space-y-2">
+              {/* Option 1: Buy with Card */}
+              <button
+                onClick={() => {
+                  setIsDepositModalOpen(false);
+                  fundWallet?.();
+                }}
+                className="w-full p-3 border border-slate-200 dark:border-slate-700 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
               >
-                {depositMutation.isPending ? "Processing..." : "Continue"}
-              </Button>
+                <div className="text-left">
+                  <h3 className="font-semibold text-slate-900 dark:text-white text-xs">
+                    💳 Buy with Card
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    Moonpay / Stripe
+                  </p>
+                </div>
+              </button>
+
+              {/* Option 2: Bridge */}
+              <button
+                onClick={() => {
+                  setIsDepositModalOpen(false);
+                  window.open("https://stargate.finance", "_blank");
+                }}
+                className="w-full p-3 border border-slate-200 dark:border-slate-700 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+              >
+                <div className="text-left">
+                  <h3 className="font-semibold text-slate-900 dark:text-white text-xs">
+                    🌉 Bridge USDC
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    Stargate / Across
+                  </p>
+                </div>
+              </button>
+
+              {/* Option 3: Swap */}
+              <button
+                onClick={() => {
+                  setIsDepositModalOpen(false);
+                  window.open("https://uniswap.org", "_blank");
+                }}
+                className="w-full p-3 border border-slate-200 dark:border-slate-700 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+              >
+                <div className="text-left">
+                  <h3 className="font-semibold text-slate-900 dark:text-white text-xs">
+                    🔄 Swap for USDC
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    Uniswap / DEX
+                  </p>
+                </div>
+              </button>
             </div>
           </DialogContent>
         </Dialog>
 
-        {/* Swap Dialog */}
-        <Dialog open={isSwapDialogOpen} onOpenChange={setIsSwapDialogOpen}>
-          <DialogContent className="rounded-2xl max-w-xs mx-auto border-0 bg-white dark:bg-slate-800">
-            <DialogHeader className="pb-2">
-              <DialogTitle className="text-center text-lg font-bold">
-                Currency Swap
-              </DialogTitle>
-              <DialogDescription className="sr-only">
-                Exchange between money and Bantah Bucks
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4">
-              {/* Swap Direction Toggle */}
-              <div className="flex bg-slate-50 dark:bg-slate-700 rounded-xl p-1">
-                <button
-                  onClick={() => setSwapDirection("money-to-coins")}
-                  className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-1.5 ${
-                    swapDirection === "money-to-coins"
-                      ? "bg-white dark:bg-slate-600 text-slate-900 dark:text-white shadow-sm"
-                      : "text-slate-600 dark:text-slate-400"
-                  }`}
-                >
-                  <DollarSign className="w-3 h-3" />
-                  <ArrowLeftRight className="w-3 h-3" />
-                  <Coins className="w-3 h-3" />
-                </button>
-                <button
-                  onClick={() => setSwapDirection("coins-to-money")}
-                  className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-1.5 ${
-                    swapDirection === "coins-to-money"
-                      ? "bg-white dark:bg-slate-600 text-slate-900 dark:text-white shadow-sm"
-                      : "text-slate-600 dark:text-slate-400"
-                  }`}
-                >
-                  <Coins className="w-3 h-3" />
-                  <ArrowLeftRight className="w-3 h-3" />
-                  <DollarSign className="w-3 h-3" />
-                </button>
-              </div>
-
-              {/* Current Balances */}
-              <div className="grid grid-cols-2 gap-2">
-                <div className="text-center p-2 bg-slate-50 dark:bg-slate-700 rounded-xl">
-                  <div className="flex items-center justify-center gap-1 mb-1">
-                    <DollarSign className="w-3 h-3 text-slate-600 dark:text-slate-400" />
-                    <p className="text-xs text-slate-600 dark:text-slate-400">
-                      Money
-                    </p>
-                  </div>
-                  <p className="text-sm font-bold text-slate-900 dark:text-white">
-                    {formatBalance(currentBalance)}
-                  </p>
-                </div>
-                <div className="text-center p-2 bg-slate-50 dark:bg-slate-700 rounded-xl">
-                  <div className="flex items-center justify-center gap-1 mb-1">
-                    <Coins className="w-3 h-3 text-slate-600 dark:text-slate-400" />
-                    <p className="text-xs text-slate-600 dark:text-slate-400">
-                      Coins
-                    </p>
-                  </div>
-                  <p className="text-sm font-bold text-slate-900 dark:text-white">
-                    {currentCoins.toLocaleString()}
-                  </p>
-                </div>
-              </div>
-
-              {/* Amount Input */}
-              <div className="relative">
-                <Input
-                  type="number"
-                  placeholder={`Enter ${swapDirection === "money-to-coins" ? "money" : "coins"} amount`}
-                  value={swapAmount}
-                  onChange={(e) => setSwapAmount(e.target.value)}
-                  className="text-center text-base border-0 bg-slate-50 dark:bg-slate-700 rounded-xl h-12 pl-8"
-                />
-                <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400">
-                  {swapDirection === "money-to-coins" ? (
-                    <DollarSign className="w-4 h-4" />
-                  ) : (
-                    <Coins className="w-4 h-4" />
-                  )}
-                </span>
-              </div>
-
-              {/* Conversion Preview */}
-              {swapAmount && parseFloat(swapAmount) > 0 && (
-                <div className="text-center p-2 bg-green-50 dark:bg-green-900/20 rounded-xl border border-green-100 dark:border-green-800/30">
-                  <p className="text-xs text-green-600 dark:text-green-400">
-                    You will receive:
-                  </p>
-                  <p className="text-sm font-bold text-green-900 dark:text-green-100">
-                    {swapDirection === "money-to-coins"
-                      ? `${(parseFloat(swapAmount) * 10).toLocaleString()} coins`
-                      : formatBalance(parseFloat(swapAmount) * 0.1)}
-                  </p>
-                  <p className="text-xs text-green-600 dark:text-green-400 mt-1">
-                    Rate: 1 ₦ = 10 coins
-                  </p>
-                </div>
-              )}
-
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => setIsSwapDialogOpen(false)}
-                  className="flex-1 text-sm border-0 bg-slate-50 dark:bg-slate-700 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-600"
-                >
-                  Cancel
-                </Button>
-                <Button
-                  onClick={handleSwap}
-                  disabled={!swapAmount || swapMutation.isPending}
-                  className="flex-1 text-sm rounded-xl text-black font-semibold"
-                  style={{ backgroundColor: '#ccff00' }}
-                >
-                  {swapMutation.isPending ? "Swapping..." : "Swap"}
-                </Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
-
-        {/* Withdraw Dialog */}
-        <Dialog
-          open={isWithdrawDialogOpen}
-          onOpenChange={setIsWithdrawDialogOpen}
-        >
-          <DialogContent className="rounded-2xl max-w-xs mx-auto border-0 bg-white dark:bg-slate-800">
-            <DialogHeader className="pb-2">
-              <DialogTitle className="text-center text-lg font-bold">
-                Cash Out
-              </DialogTitle>
-              <DialogDescription className="sr-only">
-                Withdraw funds from your wallet
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div className="text-center p-3 bg-slate-50 dark:bg-slate-700 rounded-xl">
-                <p className="text-xs text-slate-600 dark:text-slate-400 mb-1">
-                  Available Balance
-                </p>
-                <p className="text-lg font-bold text-slate-900 dark:text-white">
-                  {formatBalance(currentBalance)}
-                </p>
-              </div>
-              <div className="relative">
-                <Input
-                  type="number"
-                  placeholder="Enter amount"
-                  value={withdrawAmount}
-                  onChange={(e) => setWithdrawAmount(e.target.value)}
-                  className="text-center text-base border-0 bg-slate-50 dark:bg-slate-700 rounded-xl h-12 pl-8"
-                />
-                <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400">
-                  ₦
-                </span>
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => setIsWithdrawDialogOpen(false)}
-                  className="flex-1 text-sm border-0 bg-slate-50 dark:bg-slate-700 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-600"
-                >
-                  Cancel
-                </Button>
-                <Button
-                  onClick={handleWithdraw}
-                  disabled={!withdrawAmount || withdrawMutation.isPending}
-                  className="flex-1 text-sm rounded-xl text-black font-semibold"
-                  style={{ backgroundColor: '#ccff00' }}
-                >
-                  {withdrawMutation.isPending ? "Processing..." : "Cash Out"}
-                </Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
-
-        {/* Payment Modal with Iframe */}
-        <Dialog open={isPaymentModalOpen} onOpenChange={(open) => {
-          if (!open && paymentReference) {
-            // When modal closes, verify payment
-            toast({
-              title: "Verifying Payment",
-              description: "Please wait while we verify your payment...",
-            });
-
-              (async () => {
-              // Helper to parse apiRequest errors which include JSON payload in the message
-              const parseApiErrorMessage = (err: unknown) => {
-                if (err instanceof Error) {
-                  const m = err.message;
-                  // try to extract JSON part after first ':'
-                  const idx = m.indexOf(':')
-                  if (idx !== -1) {
-                    const jsonPart = m.slice(idx + 1).trim()
-                    try {
-                      const parsed = JSON.parse(jsonPart)
-                      return parsed.message || m
-                    } catch {
-                      return m
-                    }
+              {/* Option 4: Manual Transfer */}
+              <button
+                onClick={() => {
+                  if (primaryWallet?.address) {
+                    navigator.clipboard.writeText(primaryWallet.address);
+                    toast({
+                      title: "Address Copied",
+                      description: "Paste this address in your wallet to send USDC",
+                    });
                   }
-                  return m
-                }
-                return String(err)
-              }
+                }}
+                className="w-full p-4 border-2 border-slate-200 dark:border-slate-700 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors text-left"
+              >
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center flex-shrink-0">
+                    <Send className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-slate-900 dark:text-white text-sm">
+                      Send from Another Wallet
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                      Copy address to receive USDC from another wallet
+                    </p>
+                  </div>
+                </div>
+              </button>
 
-              try {
-                const response = await apiRequest("POST", "/api/wallet/verify-payment", {
-                  reference: paymentReference,
-                })
-
-                // apiRequest returns parsed JSON on success
-                toast({
-                  title: "Payment Verified",
-                  description: response?.message || "Your deposit has been credited to your account!",
-                })
-                queryClient.invalidateQueries({ queryKey: ["/api/wallet/balance"] })
-                queryClient.invalidateQueries({ queryKey: ["/api/transactions"] })
-                setDepositAmount("")
-                setIsDepositDialogOpen(false)
-              } catch (error) {
-                const msg = parseApiErrorMessage(error)
-
-                // Some backends incorrectly return 400 but include success-like messages.
-                // Treat responses that include "success"/"verified" as success as a defensive measure.
-                const lower = msg.toLowerCase()
-                if (lower.includes('success') || lower.includes('verified')) {
-                  toast({
-                    title: "Payment Verified",
-                    description: "Your deposit has been credited to your account!",
-                  })
-                  queryClient.invalidateQueries({ queryKey: ["/api/wallet/balance"] })
-                  queryClient.invalidateQueries({ queryKey: ["/api/transactions"] })
-                  setDepositAmount("")
-                  setIsDepositDialogOpen(false)
-                } else {
-                  toast({
-                    title: "Payment Pending",
-                    description: "We'll verify your payment shortly.",
-                  })
-                  console.error("Verification error:", error)
-                }
-              }
-            })()
-          }
-          setIsPaymentModalOpen(open);
-          if (!open) {
-            setPaymentUrl(null);
-            setPaymentReference(null);
-          }
-        }}>
-          <DialogContent className="max-w-md w-[95vw] sm:w-full h-[600px] sm:h-[650px] p-0 bg-transparent border-0 overflow-hidden">
-            <DialogTitle className="sr-only">Payment Checkout</DialogTitle>
-            <DialogDescription className="sr-only">
-              Complete your payment securely with Paystack
-            </DialogDescription>
-            {paymentUrl && (
-              <iframe
-                src={paymentUrl}
-                className="w-full h-full border-0 rounded-2xl"
-                title="Payment"
-                allow="payment"
-              />
-            )}
+              <div className="pt-2 border-t border-slate-200 dark:border-slate-700">
+                <p className="text-xs text-slate-500 dark:text-slate-400 text-center">
+                  💡 Tip: Make sure you're sending USDC on the <strong>Base Testnet</strong> (Chain ID: 84532)
+                </p>
+              </div>
+            </div>
+            </div>
           </DialogContent>
         </Dialog>
       </div>

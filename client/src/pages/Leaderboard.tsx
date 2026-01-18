@@ -56,14 +56,20 @@ export default function Leaderboard() {
     if (error) {
       console.error("Leaderboard error:", error);
       if (isUnauthorizedError(error)) {
-        toast({
-          title: "Unauthorized",
-          description: "You are logged out. Logging in again...",
-          variant: "destructive",
-        });
-        setTimeout(() => {
-          window.location.href = "/api/login";
-        }, 500);
+        // If user is authenticated but token expired, prompt re-login.
+        if (user) {
+          toast({
+            title: "Session expired",
+            description: "Please sign in again to view personalized data.",
+            variant: "destructive",
+          });
+          setTimeout(() => {
+            window.location.href = "/api/login";
+          }, 500);
+        } else {
+          // Public view: leaderboard is available to guests — silently ignore 401.
+          console.debug("Leaderboard: viewing as guest (unauthorized)");
+        }
       } else {
         toast({
           title: "Error loading leaderboard",

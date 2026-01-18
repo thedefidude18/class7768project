@@ -189,14 +189,14 @@ class BlockchainClient {
     try {
       const network = await this.provider.getNetwork();
       const blockNumber = await this.provider.getBlockNumber();
-      const gasPrice = await this.provider.getGasPrice();
+      const feeData = await this.provider.getFeeData();
       const adminBalance = await this.provider.getBalance(this.adminSigner.address);
 
       return {
         network: network.name,
         chainId: network.chainId,
         blockNumber,
-        gasPrice: ethers.formatUnits(gasPrice, 'gwei'),
+        gasPrice: feeData.gasPrice ? ethers.formatUnits(feeData.gasPrice, 'gwei') : '0',
         adminBalance: ethers.formatEther(adminBalance),
         adminAddress: this.adminSigner.address,
       };
