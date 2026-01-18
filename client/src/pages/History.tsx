@@ -336,7 +336,7 @@ export default function History() {
   );
 
   const TransactionCard = ({ transaction }: { transaction: any }) => {
-    const isCoinTransaction = ['gift_sent', 'gift_received', 'coins_locked', 'challenge_queue_stake'].includes(transaction.type);
+    const isCoinTransaction = ['gift_sent', 'gift_received', 'challenge_escrow'].includes(transaction.type);
     const isPositive = transaction.type === "win" || transaction.type === "prize" || transaction.type === "gift_received";
 
     return (

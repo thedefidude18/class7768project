@@ -39,7 +39,7 @@ export default function ReferralNew() {
     retry: false,
   });
 
-  const { data: userBalance = { balance: 0, coins: 0 } } = useQuery({
+  const { data: userBalance = { balance: 0 } } = useQuery({
     queryKey: ["/api/wallet/balance"],
     retry: false,
   });
@@ -48,33 +48,19 @@ export default function ReferralNew() {
   const referralArray = Array.isArray(referrals) ? referrals : [];
   const totalReferrals = referralArray.length;
   const totalEarned = totalReferrals * 500; // 500 points per referral based on code
-  const nextMilestone = Math.ceil((totalReferrals + 1) / 5) * 5; // Every 5 referrals milestone
-  const progressToNext = totalReferrals % 5;
-  const progress = (progressToNext / 5) * 100;
 
   // BetChat actual rewards based on referral system
   const rewards = [
     {
       id: 1,
-      title: "500 Bonus Points",
+      title: "500 Bantah Points",
       subtitle: `${totalReferrals} friends joined`,
       icon: "🎯",
       color: "bg-purple-100 dark:bg-purple-900",
       textColor: "text-purple-600 dark:text-purple-400",
       progress: 100,
       canRedeem: false,
-      description: "Earn 500 points for each friend who joins"
-    },
-    {
-      id: 2,
-      title: "Bonus Coins Reward",
-      subtitle: `Next milestone: ${5 - (totalReferrals % 5)} more friends`, 
-      icon: "🪙",
-      color: "bg-amber-100 dark:bg-amber-900",
-      textColor: "text-amber-600 dark:text-amber-400",
-      progress: progress,
-      canRedeem: totalReferrals >= 5 && (totalReferrals % 5) === 0,
-      description: "Get bonus coins every 5 successful referrals"
+      description: "Earn 500 Bantah Points for each friend who joins"
     },
     {
       id: 3,
@@ -176,10 +162,10 @@ export default function ReferralNew() {
               </div>
               <div className="flex-1">
                 <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white mb-1">
-                  500 Points Per Friend
+                  500 Bantah Points Per Friend
                 </h3>
                 <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
-                  Earn rewards when friends join using your link
+                  Earn 500 Bantah Points when friends join using your link
                 </p>
               </div>
             </div>
@@ -275,7 +261,7 @@ export default function ReferralNew() {
                     Both Get Rewards
                   </div>
                   <div className="text-sm text-slate-500 dark:text-slate-400">
-                    You get 500 points, they get welcome bonus
+                    You get 500 Bantah Points, they get welcome bonus
                   </div>
                 </div>
               </div>
@@ -372,7 +358,7 @@ export default function ReferralNew() {
                       </div>
                       <div className="text-right">
                         <div className="text-sm font-medium text-green-600 mb-1">
-                          +500 pts
+                          +500 Bantah Points
                         </div>
                         <div className={`text-xs px-2 py-1 rounded-full ${
                           referral.status === 'active' 

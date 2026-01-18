@@ -299,17 +299,17 @@ export function Navigation() {
                     )}
                   </button>
 
-                  {/* Wallet Coins - Mobile */}
+                  {/* Wallet Points - Mobile */}
                   <button
                     onClick={() => handleNavigation("/wallet")}
                     className="flex items-center gap-1 px-2 py-1 rounded-lg transition-colors text-xs"
                     style={{ backgroundColor: "#ccff00", color: "black" }}
                     data-tour="wallet"
                   >
-                    <i className="fas fa-coins text-yellow-500 text-xs"></i>
-                    <span className="font-medium">
-                      {typeof balance === "object" && balance !== null
-                        ? ((balance as any).coins || 0).toLocaleString()
+                    <i className=\"fas fa-zap text-yellow-500 text-xs\"></i>
+                    <span className=\"font-medium\">
+                      {typeof balance === \"object\" && balance !== null
+                        ? ((balance as any).balance || 0).toLocaleString()
                         : "0"}
                     </span>
                   </button>
@@ -456,7 +456,7 @@ export function Navigation() {
                 </button>
               )}
 
-              {/* Wallet Coins */}
+              {/* Wallet Points */}
               {user && (
                 <button
                   onClick={() => handleNavigation("/wallet")}
@@ -464,10 +464,10 @@ export function Navigation() {
                   style={{ backgroundColor: "#ccff00", color: "black" }}
                   data-tour="wallet"
                 >
-                  <i className="fas fa-coins text-yellow-500"></i>
+                  <i className="fas fa-zap text-yellow-500"></i>
                   <span className="text-sm font-medium">
                     {typeof balance === "object" && balance !== null
-                      ? ((balance as any).coins || 0).toLocaleString()
+                      ? ((balance as any).balance || 0).toLocaleString()
                       : "0"}
                   </span>
                 </button>

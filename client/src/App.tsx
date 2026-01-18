@@ -101,6 +101,8 @@ function AppRouter() {
         <Route path="/events" component={Events} />
         <Route path="/home" component={Home} />
         <Route path="/wallet" component={WalletPage} />
+        <Route path="/leaderboard" component={Leaderboard} />
+        <Route path="/about" component={About} />
         <Route path="/challenges" component={Challenges} />
         <Route path="/friends" component={Friends} />
         <Route path="/profile" component={Profile} />

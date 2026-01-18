@@ -1,4 +1,5 @@
 import { Contract, BrowserProvider, parseUnits, formatUnits } from "ethers";
+import { JsonRpcProvider } from "@ethersproject/providers";
 import { PrivyClient } from "@privy-io/react-auth";
 
 // Contract ABIs
@@ -244,5 +245,98 @@ export async function getChallengeDetails(
   } catch (error) {
     console.error("Get challenge details error:", error);
     throw error;
+  }
+}
+
+/**
+ * Get on-chain balances for an address: native (ETH), USDC, USDT, and points token.
+ * Accepts either a Privy wallet object (with getEthereumProvider) or a window/provider object.
+ * Returns raw smallest-unit strings for each token (e.g., wei, usdc 6-decimals integer).
+ */
+export async function getBalances(providerOrPrivy: any, address: string): Promise<{ nativeBalance?: string; usdcBalance?: string; usdtBalance?: string; pointsBalance?: string }>{
+  try {
+    if (!providerOrPrivy || !address) return {};
+
+    let provider: any = null;
+    // Privy embedded wallet
+    if (providerOrPrivy.getEthereumProvider) {
+      provider = new BrowserProvider(providerOrPrivy.getEthereumProvider());
+    } else if (providerOrPrivy.request || providerOrPrivy.on) {
+      // EIP-1193 provider (e.g., window.ethereum from MetaMask/Rainbow)
+      provider = new BrowserProvider(providerOrPrivy);
+    } else if (typeof providerOrPrivy === 'string') {
+      // RPC URL
+      provider = new JsonRpcProvider(providerOrPrivy);
+    } else {
+      // Fallback: try window.ethereum
+      if ((window as any).ethereum) provider = new BrowserProvider((window as any).ethereum);
+    }
+
+    if (!provider) return {};
+
+    // Read configured token addresses from env
+    const USDC = (import.meta as any).env?.VITE_USDC_ADDRESS;
+    const USDT = (import.meta as any).env?.VITE_USDT_ADDRESS;
+    const POINTS = (import.meta as any).env?.VITE_POINTS_CONTRACT_ADDRESS;
+
+    const results: any = {};
+
+    // Native balance (wei)
+    try {
+      const native = await provider.getBalance(address);
+      results.nativeBalance = native.toString();
+    } catch (err) {
+      results.nativeBalance = '0';
+    }
+
+    // ERC20 balances
+    const checks: Array<Promise<void>> = [];
+
+    if (USDC) {
+      const usdcContract = new Contract(USDC, ERC20_ABI, provider);
+      checks.push(
+        usdcContract.balanceOf(address).then((b: any) => { results.usdcBalance = b.toString(); }).catch(() => { results.usdcBalance = '0'; })
+      );
+    }
+
+    if (USDT) {
+      const usdtContract = new Contract(USDT, ERC20_ABI, provider);
+      checks.push(
+        usdtContract.balanceOf(address).then((b: any) => { results.usdtBalance = b.toString(); }).catch(() => { results.usdtBalance = '0'; })
+      );
+    }
+
+    if (POINTS) {
+      const ptsContract = new Contract(POINTS, ERC20_ABI, provider);
+      checks.push(
+        ptsContract.balanceOf(address).then((b: any) => { results.pointsBalance = b.toString(); }).catch(() => { results.pointsBalance = '0'; })
+      );
+    }
+
+    await Promise.all(checks);
+
+    // Add network/chain info
+    try {
+      const network = await provider.getNetwork();
+      results.chainId = network.chainId;
+    } catch (err) {
+      results.chainId = undefined;
+    }
+
+    // Provider name hints
+    try {
+      if (providerOrPrivy.getEthereumProvider) results.providerName = 'privy';
+      else if (typeof providerOrPrivy === 'string') results.providerName = 'rpc';
+      else if (providerOrPrivy.isMetaMask) results.providerName = 'metamask';
+      else if (providerOrPrivy.request) results.providerName = 'injected';
+      else results.providerName = 'unknown';
+    } catch (err) {
+      results.providerName = 'unknown';
+    }
+
+    return results;
+  } catch (error) {
+    console.error('getBalances error', error);
+    return {};
   }
 }

@@ -168,12 +168,10 @@ export function setupAuth(app: Express) {
 
       // Process referral rewards if applicable
       if (referrerUser) {
-        // Give referrer bonus
-        const referrerBonus = 100; // Points for referring someone
-        const referrerCoinBonus = 250; // Coins for referring someone
+        // Give referrer bonus - 500 Bantah Points for referring someone
+        const referrerBonus = 500; // Bantah Points for referring someone
 
         await storage.updateUserPoints(referrerUser.id, referrerBonus);
-        await storage.updateUserCoins(referrerUser.id, referrerCoinBonus);
 
         // Create referral record
         await storage.createReferral({
@@ -188,8 +186,8 @@ export function setupAuth(app: Express) {
           userId: referrerUser.id,
           type: 'referral_success',
           title: '🎉 Referral Success!',
-          message: `${user.firstName} joined using your referral code! You earned ${referrerBonus} points and ${referrerCoinBonus} coins.`,
-          data: { points: referrerBonus, coins: referrerCoinBonus, referredUser: user.firstName },
+          message: `${user.firstName} joined using your referral code! You earned ${referrerBonus} Bantah Points.`,
+          data: { points: referrerBonus, referredUser: user.firstName },
         });
 
         // Create transaction records for referrer
@@ -197,15 +195,7 @@ export function setupAuth(app: Express) {
           userId: referrerUser.id,
           type: 'referral_reward',
           amount: referrerBonus.toString(),
-          description: `Referral bonus for ${user.firstName} joining`,
-          status: 'completed',
-        });
-
-        await storage.createTransaction({
-          userId: referrerUser.id,
-          type: 'referral_reward',
-          amount: referrerCoinBonus.toString(),
-          description: `Referral coin bonus for ${user.firstName} joining`,
+          description: `Referral bonus - ${referrerBonus} Bantah Points for ${user.firstName} joining`,
           status: 'completed',
         });
       }
