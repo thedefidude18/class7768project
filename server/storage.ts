@@ -6,6 +6,7 @@ import {
   type Event,
   type InsertEvent,
 } from "@shared/schema";
+import { userWalletAddresses } from "@shared/schema-blockchain";
 import { db } from "./db";
 import { eq, desc } from "drizzle-orm";
 import session from "express-session";
@@ -17,6 +18,7 @@ export interface IStorage {
   getUserByUsername(username: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
   getAllUsers(): Promise<User[]>;
+  getAllUsersWithWallets(): Promise<any[]>;
   upsertUser(user: UpsertUser): Promise<User>;
   updateUserProfile(id: string, updates: Partial<User>): Promise<User>;
 
@@ -56,6 +58,38 @@ export class DatabaseStorage implements IStorage {
 
   async getAllUsers(): Promise<User[]> {
     return await this.db.select().from(users);
+  }
+
+  async getAllUsersWithWallets(): Promise<any[]> {
+    // Get all users with their wallet addresses
+    const allUsers = await this.db.select().from(users);
+    
+    // Get all wallet addresses
+    const wallets = await this.db.select().from(userWalletAddresses);
+    
+    // Create a map of userId -> wallets array
+    const walletMap = wallets.reduce((acc: any, wallet: any) => {
+      if (!acc[wallet.userId]) {
+        acc[wallet.userId] = [];
+      }
+      acc[wallet.userId].push({
+        id: wallet.id,
+        walletAddress: wallet.walletAddress,
+        chainId: wallet.chainId,
+        walletType: wallet.walletType,
+        isPrimary: wallet.isPrimary,
+        isVerified: wallet.isVerified,
+      });
+      return acc;
+    }, {});
+    
+    // Merge users with their wallets
+    return allUsers.map((user: User) => ({
+      ...user,
+      wallets: walletMap[user.id] || [],
+      // Add primaryWalletAddress for easy searching
+      primaryWalletAddress: (walletMap[user.id] || []).find((w: any) => w.isPrimary)?.walletAddress || null,
+    }));
   }
 
   async upsertUser(userData: UpsertUser): Promise<User> {

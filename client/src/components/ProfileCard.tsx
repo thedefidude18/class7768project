@@ -61,6 +61,7 @@ const ProfileCard: React.FC<ProfileCardProps> = ({ userId, onClose }) => {
   const [challengeAmount, setChallengeAmount] = useState('');
   const [challengeType, setChallengeType] = useState('prediction');
   const [localIsFollowing, setLocalIsFollowing] = useState<boolean | undefined>(undefined);
+  const [friendRequestStatus, setFriendRequestStatus] = useState<'none' | 'pending' | 'friends'>('none');
   const { user: currentUser } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -140,6 +141,34 @@ const ProfileCard: React.FC<ProfileCardProps> = ({ userId, onClose }) => {
       toast({
         title: "Error",
         description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Friend request mutation
+  const friendRequestMutation = useMutation({
+    mutationFn: async () => {
+      if (!userId) {
+        throw new Error("User ID is required");
+      }
+      return await apiRequest("POST", `/api/friends/request`, {
+        targetUserId: userId
+      });
+    },
+    onSuccess: () => {
+      setFriendRequestStatus('pending');
+      queryClient.invalidateQueries({ queryKey: ["/api/friends"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/users/${userId}/profile`, currentUser?.id] });
+      toast({
+        title: "Friend Request Sent",
+        description: `Friend request sent to ${profile?.firstName || profile?.username}`,
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to send friend request",
         variant: "destructive",
       });
     },
@@ -477,7 +506,7 @@ const ProfileCard: React.FC<ProfileCardProps> = ({ userId, onClose }) => {
 
               {/* Secondary Actions - More compact on mobile */}
               {currentUser && currentUser.id !== profile.id && (
-                <div className="grid grid-cols-3 gap-1 md:gap-1.5 mt-1.5 md:mt-2">
+                <div className="grid grid-cols-2 gap-1 md:gap-1.5 mt-1.5 md:mt-2">
                   <Button
                     onClick={handleFollow}
                     disabled={followMutation.isPending}
@@ -488,6 +517,23 @@ const ProfileCard: React.FC<ProfileCardProps> = ({ userId, onClose }) => {
                       <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-current"></div>
                     ) : (
                       localIsFollowing ? 'Following' : 'Follow'
+                    )}
+                  </Button>
+
+                  <Button
+                    onClick={() => friendRequestMutation.mutate()}
+                    disabled={friendRequestMutation.isPending || friendRequestStatus !== 'none'}
+                    variant="outline"
+                    className="rounded-xl border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs py-1 md:py-1.5 focus:outline-none focus:ring-0 h-auto"
+                  >
+                    {friendRequestMutation.isPending ? (
+                      <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-current"></div>
+                    ) : friendRequestStatus === 'pending' ? (
+                      'Pending'
+                    ) : friendRequestStatus === 'friends' ? (
+                      'Friends'
+                    ) : (
+                      'Add'
                     )}
                   </Button>
 

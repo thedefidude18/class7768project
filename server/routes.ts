@@ -60,7 +60,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Users routes
   app.get('/api/users', PrivyAuthMiddleware, async (req: AuthenticatedRequest, res) => {
     try {
-      const allUsers = await storage.getAllUsers();
+      const allUsers = await storage.getAllUsersWithWallets();
       res.json(allUsers);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch users" });

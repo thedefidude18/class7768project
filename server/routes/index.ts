@@ -7,6 +7,7 @@ import apiPayoutsRouter from './api-payouts';
 import apiPointsRouter from './api-points';
 import apiAdminResolveRouter from './api-admin-resolve';
 import apiUserRouter from './api-user';
+import apiFriendsRouter from './api-friends';
 
 export function registerBlockchainRoutes(app: express.Application) {
   /**
@@ -62,6 +63,18 @@ export function registerBlockchainRoutes(app: express.Application) {
    * GET /api/user/profile - Get current user profile
    */
   app.use('/api/user', apiUserRouter);
+
+  /**
+   * Friends Management
+   * POST /api/friends/request - Send friend request
+   * POST /api/friends/accept/:requestId - Accept friend request
+   * POST /api/friends/reject/:requestId - Reject friend request
+   * GET /api/friends - Get all friends
+   * GET /api/friends/requests - Get pending friend requests
+   * DELETE /api/friends/:friendId - Remove friend
+   * GET /api/friends/status/:userId - Check friendship status
+   */
+  app.use('/api/friends', apiFriendsRouter);
 
   console.log('✅ Blockchain REST API routes registered:');
   console.log('   - /api/challenges');

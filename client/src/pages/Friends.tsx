@@ -266,13 +266,21 @@ const createChallengeSchema = z.object({
     const firstName = (u.firstName || "").toLowerCase();
     const lastName = (u.lastName || "").toLowerCase();
     const username = (u.username || "").toLowerCase();
+    const email = (u.email || "").toLowerCase();
     const fullName = `${firstName} ${lastName}`.trim();
+    const primaryWallet = (u.primaryWalletAddress || "").toLowerCase();
+    const walletMatches = (u.wallets || []).some((w: any) => 
+      w.walletAddress?.toLowerCase().includes(searchLower)
+    );
 
     return (
       firstName.includes(searchLower) ||
       lastName.includes(searchLower) ||
       username.includes(searchLower) ||
-      fullName.includes(searchLower)
+      email.includes(searchLower) ||
+      fullName.includes(searchLower) ||
+      primaryWallet.includes(searchLower) ||
+      walletMatches
     );
   });
 
@@ -301,11 +309,15 @@ const createChallengeSchema = z.object({
 
   const handleSendRequest = () => {
     if (friendEmail.trim()) {
-      // Find user by email or username first
+      // Find user by email, username, or wallet address
+      const searchTerm = friendEmail.toLowerCase();
       const foundUser = allUsers.find(
         (u: any) => 
-          u.email?.toLowerCase() === friendEmail.toLowerCase() || 
-          u.username?.toLowerCase() === friendEmail.toLowerCase()
+          u.email?.toLowerCase() === searchTerm || 
+          u.username?.toLowerCase() === searchTerm ||
+          u.primaryWalletAddress?.toLowerCase() === searchTerm ||
+          // Also search in all wallet addresses for this user
+          (u.wallets && u.wallets.some((w: any) => w.walletAddress?.toLowerCase() === searchTerm))
       );
 
       if (foundUser) {
@@ -337,7 +349,7 @@ const createChallengeSchema = z.object({
       } else {
         toast({
           title: "User Not Found",
-          description: "Could not find a user with that email or username.",
+          description: "Could not find a user with that email, username, or wallet address.",
           variant: "destructive",
         });
       }

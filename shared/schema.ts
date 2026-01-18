@@ -210,7 +210,7 @@ export const challenges = pgTable("challenges", {
   isPinned: boolean("is_pinned").default(false), // Admin-only: pin challenge to top of feed
   // P2P Blockchain fields
   paymentTokenAddress: varchar("payment_token_address"), // ERC20 token contract address (USDC, USDT, etc.)
-  stakeAmountWei: bigint("stake_amount_wei"), // Stake amount in wei (smallest unit)
+  stakeAmountWei: bigint("stake_amount_wei", { mode: "number" }), // Stake amount in wei (smallest unit)
   onChainStatus: varchar("on_chain_status").default("pending"), // pending, submitted, confirmed, failed, completed
   creatorTransactionHash: varchar("creator_transaction_hash"), // Hash of creator's blockchain tx
   acceptorTransactionHash: varchar("acceptor_transaction_hash"), // Hash of acceptor's blockchain tx

@@ -23,6 +23,7 @@ import {
   Trash2,
   QrCode,
   Info,
+  Heart,
 } from "lucide-react";
 import { ProfileQRCode } from "@/components/ProfileQRCode";
 
@@ -47,6 +48,12 @@ export default function Profile() {
 
   const { data: achievements = [] } = useQuery({
     queryKey: ["/api/user/achievements"],
+    retry: false,
+  });
+
+  const { data: friends = [] } = useQuery({
+    queryKey: ["/api/friends"],
+    enabled: !!user?.id,
     retry: false,
   });
 
@@ -219,6 +226,70 @@ export default function Profile() {
                   </div>
                 </div>
               </div>
+            </div>
+
+            {/* Friends Section */}
+            <div className="bg-white rounded-3xl px-6 py-5 mb-6 border border-[#f0f1fa] shadow-sm">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                  <Heart className="w-5 h-5 text-red-500" />
+                  Friends
+                </h3>
+                <Button 
+                  size="sm"
+                  onClick={() => navigate("/friends")}
+                  variant="outline"
+                  className="text-xs"
+                >
+                  Manage
+                </Button>
+              </div>
+              
+              {/* Friends Stats */}
+              <div className="flex gap-4 mb-4">
+                <div className="flex-1">
+                  <div className="text-2xl font-bold text-gray-900">
+                    {(friends as any[])?.filter((f: any) => f.status === "accepted")?.length || 0}
+                  </div>
+                  <p className="text-xs text-gray-500">Friends</p>
+                </div>
+                <div className="flex-1">
+                  <div className="text-2xl font-bold text-gray-900">
+                    {(friends as any[])?.filter((f: any) => f.status === "pending")?.length || 0}
+                  </div>
+                  <p className="text-xs text-gray-500">Pending</p>
+                </div>
+              </div>
+              
+              {/* Friends List Preview */}
+              <div className="flex -space-x-2 mb-3">
+                {(friends as any[])?.filter((f: any) => f.status === "accepted")?.slice(0, 5).map((friend: any, idx: number) => {
+                  const friendUser = friend.requesterId === user?.id ? friend.addressee : friend.requester;
+                  return (
+                    <Avatar key={idx} className="w-8 h-8 border-2 border-white">
+                      <AvatarImage
+                        src={getAvatarUrl(friendUser?.id, friendUser?.username)}
+                        alt={friendUser?.firstName}
+                      />
+                      <AvatarFallback className="text-xs">
+                        {friendUser?.firstName?.charAt(0) || "F"}
+                      </AvatarFallback>
+                    </Avatar>
+                  );
+                })}
+                {((friends as any[])?.filter((f: any) => f.status === "accepted")?.length || 0) > 5 && (
+                  <div className="w-8 h-8 rounded-full bg-gray-200 border-2 border-white flex items-center justify-center text-xs font-semibold text-gray-600">
+                    +{((friends as any[])?.filter((f: any) => f.status === "accepted")?.length || 0) - 5}
+                  </div>
+                )}
+              </div>
+              
+              <Button 
+                onClick={() => navigate("/friends")}
+                className="w-full bg-gradient-to-r from-[#7440ff] to-[#5a2fd9] text-white"
+              >
+                View Friends & Add More
+              </Button>
             </div>
 
             {/* Menu Sections */}

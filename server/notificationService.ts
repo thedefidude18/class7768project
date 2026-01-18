@@ -13,15 +13,34 @@ import { sendPushNotification } from './firebase/admin';
 import { initializeFirebase } from './firebase/admin';
 
 export enum NotificationEvent {
+  // Challenge Events
   CHALLENGE_CREATED = 'challenge.created',
   CHALLENGE_STARTING_SOON = 'challenge.starting_soon',
   CHALLENGE_ENDING_SOON = 'challenge.ending_soon',
   CHALLENGE_JOINED_FRIEND = 'challenge.joined.friend',
-  IMBALANCE_DETECTED = 'imbalance.detected',
+  
+  // Friend Events
+  FRIEND_REQUEST = 'friend.request',
+  FRIEND_ACCEPTED = 'friend.accepted',
+  
+  // Leaderboard & Points
+  LEADERBOARD_RANK_CHANGE = 'leaderboard.rank_change',
+  POINTS_EARNED = 'points.earned',
+  
+  // Achievements & Bonuses
+  ACHIEVEMENT_UNLOCKED = 'achievement.unlocked',
   BONUS_ACTIVATED = 'bonus.activated',
   BONUS_EXPIRING = 'bonus.expiring',
+  
+  // Payouts & Referrals
+  PAYOUT_READY = 'payout.ready',
+  REFERRAL_BONUS = 'referral.bonus',
+  
+  // System Events
+  IMBALANCE_DETECTED = 'imbalance.detected',
   MATCH_FOUND = 'match.found',
   SYSTEM_JOINED = 'system.joined',
+  ACCOUNT_ALERT = 'account.alert',
 }
 
 export enum NotificationChannel {
@@ -63,11 +82,19 @@ const DEFAULT_RATE_LIMIT: RateLimitConfig = {
     [NotificationEvent.CHALLENGE_STARTING_SOON]: 120,     // 2 mins
     [NotificationEvent.CHALLENGE_ENDING_SOON]: 300,       // 5 mins
     [NotificationEvent.CHALLENGE_JOINED_FRIEND]: 60,      // 1 min
-    [NotificationEvent.IMBALANCE_DETECTED]: 600,          // 10 mins
+    [NotificationEvent.FRIEND_REQUEST]: 300,              // 5 mins
+    [NotificationEvent.FRIEND_ACCEPTED]: 60,              // 1 min
+    [NotificationEvent.LEADERBOARD_RANK_CHANGE]: 600,     // 10 mins (don't spam rank changes)
+    [NotificationEvent.POINTS_EARNED]: 120,               // 2 mins
+    [NotificationEvent.ACHIEVEMENT_UNLOCKED]: 60,         // 1 min
     [NotificationEvent.BONUS_ACTIVATED]: 60,              // 1 min
     [NotificationEvent.BONUS_EXPIRING]: 120,              // 2 mins
+    [NotificationEvent.PAYOUT_READY]: 0,                  // No cooldown (critical)
+    [NotificationEvent.REFERRAL_BONUS]: 60,               // 1 min
+    [NotificationEvent.IMBALANCE_DETECTED]: 600,          // 10 mins
     [NotificationEvent.MATCH_FOUND]: 0,                   // No cooldown (critical)
     [NotificationEvent.SYSTEM_JOINED]: 300,               // 5 mins
+    [NotificationEvent.ACCOUNT_ALERT]: 0,                 // No cooldown (critical)
   },
 };
 
