@@ -40,7 +40,7 @@ import { useLocation } from "wouter";
 
 export default function WalletPage() {
   const { user } = useAuth();
-  const { user: privyUser, fundWallet } = usePrivy();
+  const { user: privyUser, fundWallet, getEthereumProvider } = usePrivy();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [, navigate] = useLocation();
@@ -48,6 +48,23 @@ export default function WalletPage() {
   const [isClaimModalOpen, setIsClaimModalOpen] = useState(false);
   const [claimableChallenges, setClaimableChallenges] = useState<any[]>([]);
   const [claiming, setClaiming] = useState<boolean>(false);
+
+  // Fetch ETH price in USD
+  const { data: ethPrice } = useQuery({
+    queryKey: ['eth-price'],
+    queryFn: async () => {
+      try {
+        const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd');
+        const data = await response.json();
+        return data.ethereum?.usd || 0;
+      } catch (err) {
+        console.warn('Failed to fetch ETH price:', err);
+        return 0;
+      }
+    },
+    staleTime: 60000, // 1 minute
+    retry: false,
+  });
 
   // Auto-sync Privy wallet to database when connected
   useEffect(() => {
@@ -184,12 +201,27 @@ export default function WalletPage() {
   // Prefer primary connected wallet crypto (USDC) display when available
   // If the server hasn't recorded the Privy wallet yet, show Privy as a fallback
   const serverPrimary = walletsData?.wallets?.find((w: any) => w.isPrimary) || null;
-  const privyFallback = privyUser?.wallet?.address
+  
+  // Check for external wallet connection (MetaMask, etc.)
+  const externalWallet = (window as any).ethereum?.selectedAddress 
+    ? {
+        id: 'external-wallet',
+        address: (window as any).ethereum.selectedAddress,
+        type: 'external',
+        isPrimary: !serverPrimary, // Use external as primary if no server primary
+        usdcBalance: null,
+        usdtBalance: null,
+        nativeBalance: null,
+        pointsBalance: null,
+      }
+    : null;
+  
+  const privyFallback = privyUser?.wallet?.address && !externalWallet
     ? {
         id: 'privy-fallback',
         address: privyUser.wallet.address,
         type: 'privy',
-        isPrimary: true,
+        isPrimary: !serverPrimary && !externalWallet,
         usdcBalance: null,
         usdtBalance: null,
         nativeBalance: null,
@@ -197,7 +229,7 @@ export default function WalletPage() {
       }
     : null;
 
-  const primaryWallet = serverPrimary || privyFallback || null;
+  const primaryWallet = serverPrimary || externalWallet || privyFallback || null;
 
   const formatTokenAmount = (value: any, decimals = 0, maxDecimals = 4) => {
     if (value === null || value === undefined) return '0';
@@ -223,9 +255,33 @@ export default function WalletPage() {
     queryKey: ["/onchain/balances", primaryWallet?.address],
     enabled: !!primaryWallet?.address,
     queryFn: async () => {
-      const providerSource = privyUser?.wallet ? privyUser : (window as any).ethereum ? (window as any).ethereum : null;
-      if (!providerSource) return {};
-      return await getBalances(providerSource, primaryWallet.address);
+      let providerSource = null;
+      let providerType = 'unknown';
+      
+      // Prefer external wallet provider
+      if ((window as any).ethereum) {
+        providerSource = (window as any).ethereum;
+        providerType = (window as any).ethereum.isMetaMask ? 'metamask' : 'injected';
+      }
+      // Fallback to Privy provider
+      else if (getEthereumProvider) {
+        try {
+          providerSource = await getEthereumProvider();
+          providerType = 'privy';
+        } catch (err) {
+          console.warn('Failed to get Privy provider:', err);
+        }
+      }
+      
+      if (!providerSource) {
+        return {};
+      }
+      
+      const balances = await getBalances(providerSource, primaryWallet.address);
+      // Override provider name with our detected type
+      balances.providerName = providerType;
+      
+      return balances;
     },
     refetchInterval: 15000,
     retry: false,
@@ -243,10 +299,10 @@ export default function WalletPage() {
         ];
         for (const t of order) {
           const v = mergedPrimary[t.key];
-          if (v && Number(v) > 0) return formatTokenAmount(Number(v), t.decimals, t.max) + ' ' + t.label;
+          if (v !== undefined && v !== null) return formatTokenAmount(Number(v), t.decimals, t.max) + ' ' + t.label;
         }
-        // fallback to full address when no balances — user insisted on address, not truncated mock
-        return mergedPrimary.address ? mergedPrimary.address : 'No connected wallet';
+        // fallback to ETH with 0 balance if no wallet data
+        return '0 ETH';
       })()
     : 'No connected wallet';
 
@@ -256,6 +312,18 @@ export default function WalletPage() {
     return n > 999 ? '1K+' : Math.round(n).toString();
   })();
 
+  // Calculate USD value of wallet balance
+  const getUsdValue = () => {
+    if (!ethPrice || !mergedPrimary?.nativeBalance) return null;
+    try {
+      const ethAmount = Number(mergedPrimary.nativeBalance) / Math.pow(10, 18);
+      const usdValue = ethAmount * ethPrice;
+      return usdValue > 0 ? `$${usdValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : null;
+    } catch {
+      return null;
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 theme-transition pb-[50px]">
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -263,7 +331,7 @@ export default function WalletPage() {
         <div className="mb-6"></div>
 
         {/* Balance Cards Grid (Wallet / Bantah Points) */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 mb-5">
           {/* Wallet Balance Card */}
           <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-2xl p-4 border border-emerald-100 dark:border-emerald-800/30">
             <div className="flex items-center justify-between mb-2">
@@ -273,14 +341,10 @@ export default function WalletPage() {
             </div>
             <div className="space-y-0.5">
               <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">Wallet Balance</p>
-              <h3 className="text-xl font-bold text-emerald-900 dark:text-emerald-100">{primaryTokenDisplay}</h3>
-              <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                {onchainBalances?.providerName && <span className="mr-2">Provider: {onchainBalances.providerName}</span>}
-                {onchainBalances?.chainId && <span className="mr-2">Network: {onchainBalances.chainId}</span>}
-                {onchainBalances?.chainId && Number(onchainBalances.chainId) !== Number((import.meta as any).env?.VITE_CHAIN_ID || 84532) && (
-                  <span className="text-red-600">Wrong network — expected {(import.meta as any).env?.VITE_CHAIN_ID || 84532}</span>
-                )}
-              </div>
+              <h3 className="text-xl font-bold text-emerald-900 dark:text-emerald-100">
+                {primaryTokenDisplay}
+                {getUsdValue() && <span className="text-sm text-emerald-700 dark:text-emerald-300"> ({getUsdValue()})</span>}
+              </h3>
             </div>
           </div>
 

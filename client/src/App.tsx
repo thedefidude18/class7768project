@@ -40,6 +40,7 @@ import EventChatPage from "./pages/EventChatPage";
 import AdminDashboardOverview from "./pages/AdminDashboardOverview";
 import BantahXBT from "./pages/BantahXBT";
 import Docs from "./pages/Docs";
+import FAQ from "./pages/FAQ";
 import AdminEventPayouts from "./pages/AdminEventPayouts";
 import AdminChallengePayouts from "./pages/AdminChallengePayouts";
 import AdminChallengeCreate from "./pages/AdminChallengeCreate";
@@ -106,6 +107,7 @@ function AppRouter() {
         <Route path="/leaderboard" component={Leaderboard} />
         <Route path="/about" component={About} />
         <Route path="/docs" component={Docs} />
+        <Route path="/faq" component={FAQ} />
         <Route path="/help-support" component={HelpSupport} />
         <Route path="/bantahxbt" component={BantahXBT} />
         <Route path="/challenges" component={Challenges} />

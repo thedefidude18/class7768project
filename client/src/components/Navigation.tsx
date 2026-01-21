@@ -419,7 +419,7 @@ export function Navigation() {
                       Docs
                     </DropdownMenuItem>
                     <DropdownMenuItem
-                      onClick={() => handleNavigation("/help-support")}
+                      onClick={() => handleNavigation("/faq")}
                       className="cursor-pointer"
                     >
                       <HelpCircle className="w-4 h-4 mr-2" />

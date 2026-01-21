@@ -253,26 +253,40 @@ export async function getChallengeDetails(
  * Accepts either a Privy wallet object (with getEthereumProvider) or a window/provider object.
  * Returns raw smallest-unit strings for each token (e.g., wei, usdc 6-decimals integer).
  */
-export async function getBalances(providerOrPrivy: any, address: string): Promise<{ nativeBalance?: string; usdcBalance?: string; usdtBalance?: string; pointsBalance?: string }>{
+export async function getBalances(providerOrPrivy: any, address: string): Promise<{ nativeBalance?: string; usdcBalance?: string; usdtBalance?: string; pointsBalance?: string; providerName?: string; chainId?: number }>{
   try {
     if (!providerOrPrivy || !address) return {};
 
     let provider: any = null;
-    // Privy embedded wallet
+    let providerDebugInfo = '';
+    
+    // For EIP-1193 injected providers, use RPC URL instead to avoid account rejection
+    // Read-only operations don't need account access
+    const RPC_URL = (import.meta as any).env?.VITE_BASE_TESTNET_RPC || 'https://sepolia.base.org';
+    
     if (providerOrPrivy.getEthereumProvider) {
+      // Privy embedded wallet
       provider = new BrowserProvider(providerOrPrivy.getEthereumProvider());
+      providerDebugInfo = 'Privy embedded wallet';
     } else if (providerOrPrivy.request || providerOrPrivy.on) {
       // EIP-1193 provider (e.g., window.ethereum from MetaMask/Rainbow)
-      provider = new BrowserProvider(providerOrPrivy);
+      // Use RPC URL for read-only operations to avoid account rejection
+      provider = new JsonRpcProvider(RPC_URL);
+      providerDebugInfo = 'RPC URL (read-only for MetaMask-injected provider)';
     } else if (typeof providerOrPrivy === 'string') {
       // RPC URL
       provider = new JsonRpcProvider(providerOrPrivy);
+      providerDebugInfo = 'RPC URL provider';
     } else {
-      // Fallback: try window.ethereum
-      if ((window as any).ethereum) provider = new BrowserProvider((window as any).ethereum);
+      // Fallback: use RPC URL
+      provider = new JsonRpcProvider(RPC_URL);
+      providerDebugInfo = 'RPC URL fallback';
     }
 
-    if (!provider) return {};
+    if (!provider) {
+      console.warn(`getBalances: No provider could be initialized for address ${address}`);
+      return {};
+    }
 
     // Read configured token addresses from env
     const USDC = (import.meta as any).env?.VITE_USDC_ADDRESS;
