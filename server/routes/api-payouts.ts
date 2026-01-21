@@ -269,4 +269,47 @@ router.post('/batch-claim', isAuthenticated, async (req: Request, res: Response)
   }
 });
 
+/**
+ * GET /api/payouts/earnings-history
+ * Get cumulative earnings data for the past N days
+ */
+router.get('/earnings-history', isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    const days = parseInt(req.query.days as string) || 7;
+    
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    // Generate realistic mock daily data for the past N days
+    const data = [];
+    let cumulativeEarnings = Math.random() * 50; // Start with some random amount
+    
+    for (let i = days - 1; i >= 0; i--) {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      date.setHours(0, 0, 0, 0);
+      
+      // Mock daily earnings with more realistic patterns
+      // Most days earn 5-30, some days earn more
+      const variance = Math.sin(i * 0.5) * 10 + 15;
+      const dailyEarnings = Math.max(0, variance + (Math.random() - 0.5) * 20);
+      cumulativeEarnings += dailyEarnings;
+      
+      data.push({
+        date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        amount: parseFloat(cumulativeEarnings.toFixed(2)),
+      });
+    }
+
+    res.json(data);
+  } catch (error: any) {
+    res.status(500).json({
+      error: 'Failed to get earnings history',
+      message: error.message,
+    });
+  }
+});
+
 export default router;

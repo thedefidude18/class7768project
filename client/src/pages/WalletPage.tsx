@@ -37,6 +37,7 @@ import {
   Check,
 } from "lucide-react";
 import { useLocation } from "wouter";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
 
 export default function WalletPage() {
   const { user } = useAuth();
@@ -48,6 +49,7 @@ export default function WalletPage() {
   const [isClaimModalOpen, setIsClaimModalOpen] = useState(false);
   const [claimableChallenges, setClaimableChallenges] = useState<any[]>([]);
   const [claiming, setClaiming] = useState<boolean>(false);
+  const [chartDays, setChartDays] = useState<7 | 30>(7);
 
   // Fetch ETH price in USD
   const { data: ethPrice } = useQuery({
@@ -63,6 +65,25 @@ export default function WalletPage() {
       }
     },
     staleTime: 60000, // 1 minute
+    retry: false,
+  });
+
+  // Fetch earnings history for chart
+  const { data: earningsHistory = [] } = useQuery({
+    queryKey: ['earnings-history', user?.id, chartDays],
+    enabled: !!user?.id,
+    queryFn: async () => {
+      try {
+        console.log('📊 Fetching earnings history for:', chartDays, 'days');
+        const data = await apiRequest('GET', `/api/payouts/earnings-history?days=${chartDays}`);
+        console.log('✅ Earnings history received:', data);
+        return data;
+      } catch (err) {
+        console.warn('⚠️ Failed to fetch earnings history:', err);
+        return [];
+      }
+    },
+    staleTime: 300000, // 5 minutes
     retry: false,
   });
 
@@ -326,114 +347,145 @@ export default function WalletPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 theme-transition pb-[50px]">
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
         {/* Header Section */}
-        <div className="mb-6"></div>
+        <div className="mb-3 sm:mb-6"></div>
 
         {/* Balance Cards Grid (Wallet / Bantah Points) */}
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 mb-5">
+        <div className="grid grid-cols-3 md:grid-cols-2 xl:grid-cols-3 gap-2 sm:gap-3 mb-3 sm:mb-5">
           {/* Wallet Balance Card */}
-          <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-2xl p-4 border border-emerald-100 dark:border-emerald-800/30">
-            <div className="flex items-center justify-between mb-2">
-              <div className="w-8 h-8 rounded-xl bg-emerald-200 dark:bg-emerald-700 flex items-center justify-center">
-                <Wallet className="w-4 h-4 text-emerald-700 dark:text-emerald-300" />
+          <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-xl sm:rounded-2xl p-2 sm:p-4 border border-emerald-100 dark:border-emerald-800/30">
+            <div className="flex items-center justify-between mb-1 sm:mb-2">
+              <div className="w-6 sm:w-8 h-6 sm:h-8 rounded-lg sm:rounded-xl bg-emerald-200 dark:bg-emerald-700 flex items-center justify-center">
+                <Wallet className="w-3 sm:w-4 h-3 sm:h-4 text-emerald-700 dark:text-emerald-300" />
               </div>
             </div>
             <div className="space-y-0.5">
-              <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">Wallet Balance</p>
-              <h3 className="text-xl font-bold text-emerald-900 dark:text-emerald-100">
+              <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">Wallet</p>
+              <h3 className="text-xs sm:text-xl font-bold text-emerald-900 dark:text-emerald-100">
                 {primaryTokenDisplay}
-                {getUsdValue() && <span className="text-sm text-emerald-700 dark:text-emerald-300"> ({getUsdValue()})</span>}
+                {getUsdValue() && <span className="text-xs sm:text-sm text-emerald-700 dark:text-emerald-300"> ({getUsdValue()})</span>}
               </h3>
             </div>
           </div>
 
           {/* Earnings Card */}
-          <div className="bg-sky-50 dark:bg-sky-900/20 rounded-2xl p-4 border border-sky-100 dark:border-sky-800/30">
-            <div className="flex items-center justify-between mb-2">
-              <div className="w-8 h-8 rounded-xl bg-sky-200 dark:bg-sky-700 flex items-center justify-center">
-                <Zap className="w-4 h-4 text-sky-700 dark:text-sky-300" />
+          <div className="bg-sky-50 dark:bg-sky-900/20 rounded-xl sm:rounded-2xl p-2 sm:p-4 border border-sky-100 dark:border-sky-800/30">
+            <div className="flex items-center justify-between mb-1 sm:mb-2">
+              <div className="w-6 sm:w-8 h-6 sm:h-8 rounded-lg sm:rounded-xl bg-sky-200 dark:bg-sky-700 flex items-center justify-center">
+                <Zap className="w-3 sm:w-4 h-3 sm:h-4 text-sky-700 dark:text-sky-300" />
               </div>
             </div>
             <div className="space-y-0.5">
               <p className="text-xs text-sky-600 dark:text-sky-400 font-medium">Earnings</p>
-              <h3 className="text-xl font-bold text-sky-900 dark:text-sky-100">{formatTokenAmount(Number(currentBalance || 0), 0, 4)}</h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400">Updated from activity</p>
+              <h3 className="text-sm sm:text-xl font-bold text-sky-900 dark:text-sky-100">{formatTokenAmount(Number(currentBalance || 0), 0, 4)}</h3>
             </div>
           </div>
 
           {/* Bantah Points Card */}
-          <div className="bg-amber-50 dark:bg-amber-900/20 rounded-2xl p-4 border border-amber-100 dark:border-amber-800/30">
-            <div className="flex items-center justify-between mb-2">
-              <div className="w-8 h-8 rounded-xl bg-amber-200 dark:bg-amber-700 flex items-center justify-center">
-                <Zap className="w-4 h-4 text-amber-700 dark:text-amber-300" />
+          <div className="bg-amber-50 dark:bg-amber-900/20 rounded-xl sm:rounded-2xl p-2 sm:p-4 border border-amber-100 dark:border-amber-800/30">
+            <div className="flex items-center justify-between mb-1 sm:mb-2">
+              <div className="w-6 sm:w-8 h-6 sm:h-8 rounded-lg sm:rounded-xl bg-amber-200 dark:bg-amber-700 flex items-center justify-center">
+                <Zap className="w-3 sm:w-4 h-3 sm:h-4 text-amber-700 dark:text-amber-300" />
               </div>
-              <div className="w-5 h-5 rounded-full bg-amber-200 dark:bg-amber-700 flex items-center justify-center">
+              <div className="w-4 sm:w-5 h-4 sm:h-5 rounded-full bg-amber-200 dark:bg-amber-700 flex items-center justify-center">
                 <span className="text-xs font-bold text-amber-700 dark:text-amber-300">{currentPointsShort > '999' ? '1K+' : currentPointsShort}</span>
               </div>
             </div>
             <div className="space-y-0.5">
               <p className="text-xs text-amber-600 dark:text-amber-400 font-medium">Bantah Points</p>
-              <h3 className="text-xl font-bold text-amber-900 dark:text-amber-100">{currentPointsDisplay}</h3>
+              <h3 className="text-sm sm:text-xl font-bold text-amber-900 dark:text-amber-100">{currentPointsDisplay}</h3>
             </div>
           </div>
         </div>
 
-        {/* Connected Wallets */}
-        <div className="mt-6">
-          <h4 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-3">Connected Wallets</h4>
-          {
-            (() => {
-              const serverWallets = walletsData?.wallets || [];
-              const walletsToShow: any[] = [...serverWallets];
-              if (privyFallback && !serverWallets.find((s: any) => s.address?.toLowerCase() === privyFallback.address.toLowerCase())) {
-                walletsToShow.unshift(privyFallback);
-              }
+        {/* Performance/Earnings Chart */}
+        <div className="bg-white dark:bg-slate-800 rounded-2xl p-3 sm:p-4 border border-slate-200 dark:border-slate-700 mt-6 sm:mt-8">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white">Portfolio Performance</h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Cumulative earnings</p>
+            </div>
+            <div className="flex gap-2">
+              <button 
+                onClick={() => setChartDays(7)}
+                className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-all ${
+                  chartDays === 7 
+                    ? 'bg-emerald-500 text-white' 
+                    : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
+                }`}
+              >
+                7d
+              </button>
+              <button 
+                onClick={() => setChartDays(30)}
+                className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-all ${
+                  chartDays === 30 
+                    ? 'bg-emerald-500 text-white' 
+                    : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
+                }`}
+              >
+                30d
+              </button>
+            </div>
+          </div>
 
-              if (walletsToShow.length === 0) {
-                return <div className="text-xs text-slate-500">No connected wallets found.</div>;
-              }
-
-              const prepared = walletsToShow.map((w: any) => (
-                mergedPrimary && w.address && mergedPrimary.address && w.address.toLowerCase() === mergedPrimary.address.toLowerCase()
-                  ? { ...w, ...onchainBalances }
-                  : w
-              ));
-
-              return (
-                <div className="space-y-3">
-                  {prepared.map((w: any) => (
-                    <div key={w.id || w.address} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-900 rounded-lg border">
-                      <div>
-                        <div className="text-sm font-medium text-slate-800 dark:text-slate-100">{w.address}</div>
-                        <div className="text-xs text-slate-500">{w.type} • {w.isPrimary ? 'Primary' : 'Connected'}</div>
-                        <div className="text-xs text-slate-500 mt-1">
-                          {(() => {
-                            const tokens = getTokenStrings(w);
-                            return tokens.join(' • ');
-                          })()}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {!w.isPrimary && w.id && (
-                          <Button size="sm" onClick={() => setPrimaryMutation.mutate(w.id)}>
-                            Set primary
-                          </Button>
-                        )}
-                        <Button size="sm" variant="ghost" onClick={() => navigator.clipboard.writeText(w.address)}>
-                          Copy
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              );
-            })()
-          }
+          {earningsHistory && earningsHistory.length > 0 ? (
+            <ResponsiveContainer width="100%" height={140}>
+              <AreaChart data={earningsHistory} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
+                <defs>
+                  <linearGradient id="colorAmount" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
+                    <stop offset="95%" stopColor="#10b981" stopOpacity={0.01}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="0" stroke="transparent" vertical={false} />
+                <XAxis 
+                  dataKey="date" 
+                  stroke="#94a3b8"
+                  style={{ fontSize: '11px' }}
+                  tick={false}
+                  axisLine={false}
+                />
+                <YAxis 
+                  stroke="#94a3b8"
+                  style={{ fontSize: '11px' }}
+                  tickFormatter={(value) => `$${value}`}
+                  width={40}
+                  axisLine={false}
+                />
+                <Tooltip 
+                  formatter={(value: any) => [`$${Number(value).toFixed(2)}`, 'Earnings']}
+                  labelFormatter={(label) => `Date: ${label}`}
+                  contentStyle={{ 
+                    backgroundColor: '#1f2937', 
+                    border: '1px solid #374151', 
+                    borderRadius: '8px', 
+                    fontSize: '12px',
+                    color: '#fff'
+                  }}
+                  cursor={{ stroke: '#10b981', strokeWidth: 2 }}
+                />
+                <Area 
+                  type="monotone" 
+                  dataKey="amount" 
+                  stroke="#10b981" 
+                  strokeWidth={2.5}
+                  fill="url(#colorAmount)"
+                  isAnimationActive={true}
+                  animationDuration={800}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="h-24 flex items-center justify-center text-xs text-slate-500">
+              <p>No earnings data yet. Start earning to see your performance!</p>
+            </div>
+          )}
         </div>
 
         {/* Deposit & Claim Actions */}
-        <div className="grid grid-cols-2 gap-3 mt-6">
+        <div className="grid grid-cols-2 gap-2 sm:gap-3 mt-6 sm:mt-10">
           <Button
             onClick={() => setIsDepositModalOpen(true)}
             className="bg-green-600 hover:bg-green-700 text-white rounded-xl h-12 font-semibold flex items-center justify-center gap-2"
@@ -468,7 +520,7 @@ export default function WalletPage() {
         </div>
 
         {/* Recent Transactions */}
-        <div className="bg-white dark:bg-slate-800 rounded-3xl p-6 border border-slate-200 dark:border-slate-700">
+        <div className="bg-white dark:bg-slate-800 rounded-3xl p-6 border border-slate-200 dark:border-slate-700 mt-8 sm:mt-12">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-bold text-slate-900 dark:text-white">
               Recent Activity
