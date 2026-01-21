@@ -48,6 +48,9 @@ import {
   Award,
   Search,
   Info,
+  ChevronDown,
+  Zap,
+  HelpCircle,
 } from "lucide-react";
 import { Link } from "wouter"; // Import Link from wouter
 import { FloatingBantzzButton } from "./FloatingBantzzButton";
@@ -187,6 +190,9 @@ export function Navigation() {
     if (location.startsWith("/terms-of-service")) return "Terms of Service";
     if (location.startsWith("/privacy-policy")) return "Privacy Policy";
     if (location.startsWith("/data-deletion-request")) return "Data Deletion";
+    if (location.startsWith("/about")) return "About";
+    if (location.startsWith("/docs")) return "Documentation";
+    if (location.startsWith("/bantahxbt")) return "BantahXBT";
     return "Bantah";
   };
 
@@ -306,9 +312,9 @@ export function Navigation() {
                     style={{ backgroundColor: "#ccff00", color: "black" }}
                     data-tour="wallet"
                   >
-                    <i className=\"fas fa-zap text-yellow-500 text-xs\"></i>
-                    <span className=\"font-medium\">
-                      {typeof balance === \"object\" && balance !== null
+                    <i className="fas fa-zap text-yellow-500 text-xs"></i>
+                    <span className="font-medium">
+                      {typeof balance === "object" && balance !== null
                         ? ((balance as any).balance || 0).toLocaleString()
                         : "0"}
                     </span>
@@ -374,16 +380,53 @@ export function Navigation() {
                   Leaderboard
                 </button>
                 <button
-                  onClick={() => handleNavigation("/about")}
+                  onClick={() => handleNavigation("/bantahxbt")}
                   className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 flex items-center gap-2 ${
-                    location === "/about"
+                    location === "/bantahxbt"
                       ? "bg-white dark:bg-slate-800 text-gray-900 dark:text-white shadow-lg"
                       : "text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-white/50 dark:hover:bg-slate-800/50"
                   }`}
                 >
-                  <Info className="w-4 h-4" />
-                  About
+                  <Zap className="w-4 h-4" />
+                  BantahXBT
                 </button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 flex items-center gap-2 ${
+                        location === "/about" || location === "/docs" || location === "/help-support"
+                          ? "bg-white dark:bg-slate-800 text-gray-900 dark:text-white shadow-lg"
+                          : "text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-white/50 dark:hover:bg-slate-800/50"
+                      }`}
+                    >
+                      More
+                      <ChevronDown className="w-4 h-4" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700">
+                    <DropdownMenuItem
+                      onClick={() => handleNavigation("/about")}
+                      className="cursor-pointer"
+                    >
+                      <Info className="w-4 h-4 mr-2" />
+                      About
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => handleNavigation("/docs")}
+                      className="cursor-pointer"
+                    >
+                      <Search className="w-4 h-4 mr-2" />
+                      Docs
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => handleNavigation("/help-support")}
+                      className="cursor-pointer"
+                    >
+                      <HelpCircle className="w-4 h-4 mr-2" />
+                      FAQ
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
 
               {/* Secondary Navigation Group */}

@@ -38,6 +38,8 @@ import ChallengeDetail from "./pages/ChallengeDetail";
 import Recommendations from "./pages/Recommendations";
 import EventChatPage from "./pages/EventChatPage";
 import AdminDashboardOverview from "./pages/AdminDashboardOverview";
+import BantahXBT from "./pages/BantahXBT";
+import Docs from "./pages/Docs";
 import AdminEventPayouts from "./pages/AdminEventPayouts";
 import AdminChallengePayouts from "./pages/AdminChallengePayouts";
 import AdminChallengeCreate from "./pages/AdminChallengeCreate";
@@ -103,6 +105,9 @@ function AppRouter() {
         <Route path="/wallet" component={WalletPage} />
         <Route path="/leaderboard" component={Leaderboard} />
         <Route path="/about" component={About} />
+        <Route path="/docs" component={Docs} />
+        <Route path="/help-support" component={HelpSupport} />
+        <Route path="/bantahxbt" component={BantahXBT} />
         <Route path="/challenges" component={Challenges} />
         <Route path="/friends" component={Friends} />
         <Route path="/profile" component={Profile} />
